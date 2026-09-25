@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: kaayakasetu-platform
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: DEBUG
+        value: "False"
+      - key: DB_PATH
+        value: /app/data/bluecollar.db

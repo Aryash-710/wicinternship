@@ -1,0 +1,27 @@
+services:
+  kaayakasetu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kaayakasetu-platform:latest
+    container_name: kaayakasetu-platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=False
+      - DB_PATH=/app/data/bluecollar.db
+    volumes:
+      - bluecollar_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  bluecollar_data:
+    name: kaayakasetu_sqlite_data
