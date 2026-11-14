@@ -16,6 +16,9 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
+# Telecom configuration
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "+17372508034")
+
 # Default search radius in kilometers
 DEFAULT_RADIUS_KM = 25.0
 MAX_RADIUS_KM = 100.0

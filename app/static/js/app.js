@@ -444,17 +444,17 @@ function switchTab(tabId, btn) {
 }
 
 // ============================================================================
-// Insights Ticker
+// Insights Helper
 // ============================================================================
 async function loadInsights() {
   try {
     const res = await fetch("/api/v1/feeds/insights");
     const data = await res.json();
-    document.getElementById("stat-total-workers").innerText = data.total_registered_workers;
-    document.getElementById("stat-open-jobs").innerText = data.open_job_vacancies;
-    document.getElementById("stat-total-contacts").innerText = data.active_inquiries;
+    const sw = document.getElementById("stat-total-workers"); if (sw) sw.innerText = data.total_registered_workers;
+    const sj = document.getElementById("stat-open-jobs"); if (sj) sj.innerText = data.open_job_vacancies;
+    const sc = document.getElementById("stat-total-contacts"); if (sc) sc.innerText = data.active_inquiries;
   } catch (err) {
-    console.error("Failed to load insights:", err);
+    // Ticker removed from UI
   }
 }
 
