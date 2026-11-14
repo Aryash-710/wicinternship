@@ -12,7 +12,7 @@ APP_DESCRIPTION = (
 APP_VERSION = "1.0.0"
 
 # Server configuration
-HOST = os.getenv("HOST", "127.0.0.1")
+HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
 DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
