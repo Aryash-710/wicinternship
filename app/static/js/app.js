@@ -158,6 +158,7 @@ function openMainDashboard() {
   const navBtnWage = document.getElementById("nav-btn-wage");
   const navBtnPostJob = document.getElementById("nav-btn-post-job");
   const navBtnPhone = document.getElementById("nav-btn-phone-simulator");
+  const navBtnChat = document.getElementById("nav-btn-chat");
 
   const tabJobs = document.getElementById("tab-jobs");
   const tabWorkers = document.getElementById("tab-workers");
@@ -165,7 +166,11 @@ function openMainDashboard() {
   const tabWage = document.getElementById("tab-wage");
   const tabPostJob = document.getElementById("tab-post-job");
   const tabPhone = document.getElementById("tab-phone-simulator");
+  const tabChat = document.getElementById("tab-chat");
   const matchScopeBadge = document.getElementById("match-scope-badge");
+
+  // Common Messages Tab is visible to both Worker and Employer
+  if (navBtnChat) navBtnChat.style.display = "inline-flex";
 
   if (isWorker) {
     // -----------------------------------------------------------------
@@ -234,6 +239,7 @@ function openMainDashboard() {
 
   loadInsights();
   populateMatchingDropdowns();
+  loadConversations();
 }
 
 function showAuthTab(tab) {
@@ -440,6 +446,8 @@ function switchTab(tabId, btn) {
     loadJobFeed();
   } else if (tabId === "tab-workers") {
     loadWorkerFeed();
+  } else if (tabId === "tab-chat") {
+    loadConversations();
   }
 }
 
@@ -499,8 +507,8 @@ async function loadJobFeed() {
             <span>🏢 Posted by: ${job.employer_name}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('job', ${job.id}, '${job.employer_name}', '${job.employer_phone}', '${job.title}')">
-          📞 Apply / Call Employer
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('job', ${job.id}, '${job.title.replace(/'/g, "\\'")}')">
+          💬 Message Employer
         </button>
       `;
       grid.appendChild(card);
@@ -551,8 +559,8 @@ async function loadWorkerFeed() {
             <span>🗣️ Language: ${w.language_pref.toUpperCase()}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('worker', ${w.id}, '${w.name}', '${w.phone}', '${w.trade}')">
-          📞 Hire & Contact Worker
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
+          💬 Message Worker
         </button>
       `;
       grid.appendChild(card);
@@ -703,8 +711,8 @@ async function runMatching() {
               <span>ℹ️ Why: ${b.explanation}</span>
             </div>
           </div>
-          <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('job', ${j.id}, '${j.employer_name}', '${j.employer_phone}', '${j.title}')">
-            📞 Apply & Contact Employer
+          <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('job', ${j.id}, '${j.title.replace(/'/g, "\\'")}')">
+            💬 Message Employer
           </button>
         `;
       } else {
@@ -729,8 +737,8 @@ async function runMatching() {
               <span>ℹ️ Why: ${b.explanation}</span>
             </div>
           </div>
-          <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('worker', ${w.id}, '${w.name}', '${w.phone}', '${w.trade}')">
-            📞 Hire Candidate
+          <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
+            💬 Message Worker
           </button>
         `;
       }
@@ -1093,4 +1101,308 @@ function speakCurrentPrompt() {
   } else {
     speakVoice("ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಾಯಿಸಲು 1 ಒತ್ತಿ.");
   }
+}
+
+// ============================================================================
+// 1-to-1 Private Chat & Messaging Microservice Controller
+// ============================================================================
+let activeChatPartnerId = null;
+let activeChatJobId = null;
+let activeChatPartnerName = "";
+let activeChatPartnerRole = "";
+let activeChatPartnerPhone = "";
+let activeChatJobTitle = "";
+let chatPollTimer = null;
+
+async function loadConversations() {
+  const token = authToken || localStorage.getItem("kaayaka_auth_token");
+  if (!token) return;
+
+  const listEl = document.getElementById("chat-conversation-list");
+  const countEl = document.getElementById("chat-conv-count");
+  const badgeEl = document.getElementById("chat-unread-badge");
+
+  try {
+    const res = await fetch("/api/v1/chat/conversations", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const conversations = await res.json();
+
+    if (countEl) countEl.innerText = conversations.length;
+
+    let totalUnread = 0;
+    conversations.forEach(c => totalUnread += (c.unread_count || 0));
+
+    if (badgeEl) {
+      if (totalUnread > 0) {
+        badgeEl.innerText = totalUnread;
+        badgeEl.style.display = "inline-block";
+      } else {
+        badgeEl.style.display = "none";
+      }
+    }
+
+    if (!listEl) return;
+
+    if (!conversations || conversations.length === 0) {
+      listEl.innerHTML = `
+        <div style="padding:2rem 1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">
+          <div style="font-size:1.8rem; margin-bottom:0.4rem;">💬</div>
+          <div>No active conversations yet.</div>
+          <div style="font-size:0.75rem; margin-top:0.3rem;">Click "💬 Message" on any job or worker card to start!</div>
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = "";
+    conversations.forEach(c => {
+      const item = document.createElement("div");
+      item.className = `conversation-item ${activeChatPartnerId === c.partner_id ? 'active' : ''}`;
+      
+      const roleBadgeClass = c.partner_role === "worker" ? "badge-trade" : "badge-score";
+      const unreadBadge = c.unread_count > 0 
+        ? `<span class="badge" style="background:#ef4444; color:white; font-size:0.7rem; border-radius:999px; padding:2px 7px;">${c.unread_count} new</span>` 
+        : "";
+
+      item.onclick = () => openChatThread(c.partner_id, c.partner_name, c.partner_role, c.partner_phone, c.job_title, c.job_id);
+      
+      item.innerHTML = `
+        <div class="conv-avatar">${(c.partner_name || "U").charAt(0).toUpperCase()}</div>
+        <div class="conv-info">
+          <div class="conv-top">
+            <span class="conv-name">${escapeHtml(c.partner_name || "User")}</span>
+            <span class="conv-time">${formatChatTime(c.last_message_at)}</span>
+          </div>
+          <div class="conv-preview">${escapeHtml(c.last_message || "")}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+            <span class="badge ${roleBadgeClass}" style="font-size:0.68rem; padding:1px 6px;">${c.partner_role === 'worker' ? '👷 Worker' : '🏢 Employer'}</span>
+            ${unreadBadge}
+          </div>
+        </div>
+      `;
+      listEl.appendChild(item);
+    });
+  } catch (err) {
+    console.error("Error loading chat conversations:", err);
+  }
+}
+
+function openChatThread(partnerId, partnerName, partnerRole, partnerPhone, jobTitle, jobId) {
+  activeChatPartnerId = partnerId;
+  activeChatPartnerName = partnerName || "User";
+  activeChatPartnerRole = partnerRole || "user";
+  activeChatPartnerPhone = partnerPhone || "";
+  activeChatJobTitle = jobTitle || "";
+  activeChatJobId = jobId || null;
+
+  // Highlight in conversation list
+  document.querySelectorAll(".conversation-item").forEach(el => el.classList.remove("active"));
+  
+  // Update header
+  const header = document.getElementById("chat-header");
+  const partnerNameEl = document.getElementById("chat-partner-name");
+  const roleBadgeEl = document.getElementById("chat-partner-role-badge");
+  const phoneEl = document.getElementById("chat-partner-phone");
+  const jobContextEl = document.getElementById("chat-job-context");
+  const inputForm = document.getElementById("chat-input-form");
+
+  if (header) header.style.display = "flex";
+  if (partnerNameEl) partnerNameEl.innerText = activeChatPartnerName;
+  if (roleBadgeEl) {
+    roleBadgeEl.className = `badge ${activeChatPartnerRole === 'worker' ? 'badge-trade' : 'badge-score'}`;
+    roleBadgeEl.innerText = activeChatPartnerRole === 'worker' ? '👷 Worker' : '🏢 Employer';
+  }
+  if (phoneEl) phoneEl.innerText = activeChatPartnerPhone ? `📞 ${activeChatPartnerPhone}` : "";
+  if (jobContextEl) {
+    jobContextEl.innerText = activeChatJobTitle ? `💼 Re: ${activeChatJobTitle}` : "";
+  }
+  if (inputForm) inputForm.style.display = "flex";
+
+  // Hide placeholder if any
+  const placeholder = document.getElementById("chat-placeholder");
+  if (placeholder) placeholder.style.display = "none";
+
+  fetchAndRenderMessages();
+
+  // Focus input
+  const input = document.getElementById("chat-input-text");
+  if (input) input.focus();
+
+  // Periodic polling for thread updates
+  if (chatPollTimer) clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(() => {
+    const chatTab = document.getElementById("tab-chat");
+    if (chatTab && chatTab.classList.contains("active") && activeChatPartnerId) {
+      fetchAndRenderMessages(true);
+    }
+  }, 3500);
+}
+
+async function fetchAndRenderMessages(isBackground = false) {
+  const token = authToken || localStorage.getItem("kaayaka_auth_token");
+  if (!token || !activeChatPartnerId) return;
+
+  const container = document.getElementById("chat-messages-container");
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/api/v1/chat/thread/${activeChatPartnerId}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const messages = await res.json();
+
+    const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+
+    container.innerHTML = "";
+
+    if (!messages || messages.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; color:var(--text-muted); padding:3rem 1rem; font-size:0.9rem;">
+          👋 No messages yet with <strong>${escapeHtml(activeChatPartnerName)}</strong>.<br>
+          <span style="font-size:0.8rem; opacity:0.8;">Say hello or discuss work details! Only the two of you can view this thread.</span>
+        </div>
+      `;
+      return;
+    }
+
+    messages.forEach(msg => {
+      const bubble = document.createElement("div");
+      bubble.className = `chat-bubble ${msg.is_mine ? 'mine' : 'theirs'}`;
+      
+      const timeStr = formatChatTime(msg.created_at);
+      const readIndicator = msg.is_mine ? (msg.is_read ? ' • ✓✓ Read' : ' • ✓ Sent') : '';
+
+      bubble.innerHTML = `
+        <div class="bubble-sender">${msg.is_mine ? 'You' : escapeHtml(msg.sender_name || activeChatPartnerName)}</div>
+        <div class="bubble-text">${escapeHtml(msg.message_text)}</div>
+        <div class="bubble-meta">${timeStr}${readIndicator}</div>
+      `;
+      container.appendChild(bubble);
+    });
+
+    if (!isBackground || isNearBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
+
+    if (!isBackground) {
+      loadConversations();
+    }
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+  }
+}
+
+async function handleSendChatMessage(e) {
+  e.preventDefault();
+  const token = authToken || localStorage.getItem("kaayaka_auth_token");
+  if (!token || !activeChatPartnerId) return;
+
+  const input = document.getElementById("chat-input-text");
+  const text = (input ? input.value : "").trim();
+  if (!text) return;
+
+  input.value = "";
+
+  try {
+    const res = await fetch("/api/v1/chat/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        receiver_id: activeChatPartnerId,
+        message_text: text,
+        job_id: activeChatJobId || null
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || "Failed to send message.");
+      return;
+    }
+
+    await fetchAndRenderMessages();
+    await loadConversations();
+  } catch (err) {
+    console.error("Error sending message:", err);
+  }
+}
+
+async function initiateChat(targetType, targetId, titleOrName) {
+  const token = authToken || localStorage.getItem("kaayaka_auth_token");
+  if (!token) {
+    alert("Please sign in to message workers or employers.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/v1/chat/initiate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        target_type: targetType,
+        target_id: targetId
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || "Unable to initiate chat.");
+      return;
+    }
+
+    const data = await res.json();
+
+    // Switch to Chat Tab
+    switchTab("tab-chat", document.getElementById("nav-btn-chat"));
+
+    // Load conversations list and select this conversation
+    await loadConversations();
+    openChatThread(
+      data.partner_id,
+      data.partner_name,
+      data.partner_role,
+      data.partner_phone,
+      data.job_title,
+      data.job_id
+    );
+  } catch (err) {
+    console.error("Error initiating chat:", err);
+    alert("Could not start chat thread.");
+  }
+}
+
+function formatChatTime(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

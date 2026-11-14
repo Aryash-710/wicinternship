@@ -142,6 +142,23 @@ def init_db():
         );
         """)
 
+        # 7. Real 1-to-1 Private Chat Messages Table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            receiver_id INTEGER NOT NULL,
+            job_id INTEGER,
+            message_text TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+        );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, receiver_id);")
+
         conn.commit()
         seed_sample_data(conn)
 
@@ -294,6 +311,40 @@ def seed_sample_data(conn):
             username, phone, password_hash, role, full_name, worker_id, city, trade, company_name
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, sample_users)
+
+    cursor.execute("SELECT COUNT(*) as count FROM messages;")
+    msg_count = cursor.fetchone()["count"]
+    if msg_count == 0:
+        # Resolve Ramesh (user_id) and Manjunatha Traders (user_id)
+        cursor.execute("SELECT id FROM users WHERE username = 'ramesh_worker'")
+        u_ramesh = cursor.fetchone()
+        cursor.execute("SELECT id FROM users WHERE username = 'manjunatha_traders'")
+        u_manjunatha = cursor.fetchone()
+
+        if u_ramesh and u_manjunatha:
+            r_id = u_ramesh["id"]
+            m_id = u_manjunatha["id"]
+            sample_messages = [
+                (
+                    m_id, r_id, 1,
+                    "Namaskara Ramesh! We saw your 4.8-star electrician profile in Rajajinagar. Can you inspect our commercial shop 3-phase wiring tomorrow at 10 AM?",
+                    1
+                ),
+                (
+                    r_id, m_id, 1,
+                    "Namaskara sir! Yes, I am nearby in Rajajinagar and available tomorrow at 10 AM. I will bring my multimeter and tools. The offered rate of ₹1800/day is acceptable.",
+                    1
+                ),
+                (
+                    m_id, r_id, 1,
+                    "Great! Please come to 12th Main Rajajinagar near the signal. See you tomorrow morning.",
+                    0
+                )
+            ]
+            cursor.executemany("""
+            INSERT INTO messages (sender_id, receiver_id, job_id, message_text, is_read)
+            VALUES (?, ?, ?, ?, ?);
+            """, sample_messages)
 
     conn.commit()
     logger.info("Sample database initialized with realistic worker, job, and user profiles!")

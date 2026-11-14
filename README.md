@@ -17,18 +17,22 @@
 ### Key Highlights:
 1. **Zero-Friction Authentication & Strict Role Separation**:
    - Secure SHA-256 token-based authentication.
-   - **Worker Workspace**: Live Job Feed, Personal Smart Matching, Fair Wage Predictor, Regional IVR Voice Simulator.
-   - **Employer Workspace**: Available Workers Feed, Post Work Requirement, Candidate Smart Matching, Fair Wage Predictor.
+   - **Worker Workspace**: Live Job Feed, Personal Smart Matching, Fair Wage Predictor, Regional IVR Voice Simulator, 1-to-1 Private Messages.
+   - **Employer Workspace**: Available Workers Feed, Post Work Requirement, Candidate Smart Matching, Fair Wage Predictor, 1-to-1 Private Messages.
    - **No Database Leakage**: Smart Matching queries are strictly scoped to the logged-in profile.
-2. **Real-World Twilio Regional Voice IVR (`+1 (737) 250-8034`)**:
+2. **Strictly Isolated 1-to-1 Private Messaging Service**:
+   - Private, peer-to-peer messaging between workers and employers.
+   - Zero eavesdropping: Only the two active participants can see and send messages in a thread. Third parties cannot view or list other users' conversations.
+   - 1-click chat initiation directly from Job Cards ("💬 Message Employer") and Worker Cards ("💬 Message Worker").
+3. **Real-World Twilio Regional Voice IVR (`+1 (737) 250-8034`)**:
    - Direct integration with Twilio Voice Webhook (`/api/v1/telecom/ivr/twiml`).
    - Automated bilingual voice menus in **Kannada (ಕನ್ನಡ)** and **Hindi (हिन्दी)** using Amazon Polly Neural TTS (`Polly.Aditi`).
    - Supports any standard mobile or feature phone without internet.
-3. **Multi-Factor Heuristic Matching Engine**:
+4. **Multi-Factor Heuristic Matching Engine**:
    - Geodesic travel distance calculation (Haversine formula).
    - Trade compatibility and skill hierarchy overlap.
    - Wage fairness and budget alignment.
-4. **Fair Wage Prediction Engine**:
+5. **Fair Wage Prediction Engine**:
    - Calibrated against Indian economic city tiers (Tier-1, Tier-2, Tier-3).
    - Experience compounding (+3%/yr) and tool ownership allowances to prevent wage exploitation.
 
@@ -93,6 +97,7 @@ The platform enforces a dedicated **Authentication Gate**. The main dashboard op
 | **Post Work Requirement** | ❌ Hidden | ✅ **Visible** |
 | **Smart Multi-Factor Matcher** | ✅ **Visible** *(Scoped to Worker)* | ✅ **Visible** *(Scoped to Employer)* |
 | **Fair Wage Predictor** | ✅ **Visible** | ✅ **Visible** |
+| **1-to-1 Private Messages & Chat** | ✅ **Visible** *(Isolated threads)* | ✅ **Visible** *(Isolated threads)* |
 | **Sign Out Option** | ✅ **Visible** in Header | ✅ **Visible** in Header |
 
 ### ⚡ 1-Click Evaluation Accounts (Built-in Demo Logins):
@@ -135,7 +140,21 @@ Protects workers against wage exploitation and assists employers with market ben
 
 ---
 
-## ⚡ Quick Start (Local Setup)
+## 💬 1-to-1 Private Chat Microservice (`/api/v1/chat`)
+
+Replaces insecure or public contact inquiries with strict peer-to-peer 1-to-1 private messaging:
+- **Strict Privacy Isolation**: Every message query explicitly filters by `sender_id = :my_id OR receiver_id = :my_id`. Third parties cannot view or list other users' conversations.
+- **Interactive Two-Pane UI**:
+  - Left pane displays conversations list with live unread count badges.
+  - Right pane features chat header with partner profile, role badge, job context, timestamped message bubbles (`.mine` and `.theirs`), and read receipts.
+- **Direct Initiation**: Workers and employers can start messaging directly from any Job card or Candidate card with 1 click.
+- **REST Endpoints**:
+  - `GET /api/v1/chat/conversations` — Lists active conversations for the authenticated user.
+  - `GET /api/v1/chat/thread/{other_user_id}` — Retrieves isolated message history with a partner.
+  - `POST /api/v1/chat/send` — Sends a private message with optional job context.
+  - `POST /api/v1/chat/initiate` — Resolves recipient from job or worker card and opens instant thread.
+
+---
 
 ### 1. Prerequisites
 - Python 3.10 or higher installed.

@@ -267,3 +267,62 @@ def test_scoped_matching_queries_worker_and_employer():
     assert m_data["mode"] == "worker_to_jobs"
     assert "matches" in m_data
 
+
+def test_private_chat_service_and_isolation():
+    from app.services.auth_service import AuthService
+
+    # 1. User 1 (Ramesh)
+    u1 = AuthService.authenticate("ramesh_worker", "password123")
+    t1 = AuthService.create_session(u1["id"])
+
+    # 2. User 3 (Shree Manjunatha Traders)
+    u3 = AuthService.authenticate("manjunatha_traders", "password123")
+    t3 = AuthService.create_session(u3["id"])
+
+    # 3. User 2 (Manjunath Plumber - Third party)
+    u2 = AuthService.authenticate("manjunath_plumber", "password123")
+    t2 = AuthService.create_session(u2["id"])
+
+    # User 3 sends a message to User 1
+    send_res = client.post(
+        "/api/v1/chat/send",
+        headers={"Authorization": f"Bearer {t3}"},
+        json={"receiver_id": u1["id"], "message_text": "Hello Ramesh from test!", "job_id": 1}
+    )
+    assert send_res.status_code == 200
+    msg_data = send_res.json()
+    assert msg_data["sender_id"] == u3["id"]
+    assert msg_data["receiver_id"] == u1["id"]
+    assert msg_data["message_text"] == "Hello Ramesh from test!"
+
+    # User 1 fetches the thread with User 3: MUST see the message
+    thread_res1 = client.get(
+        f"/api/v1/chat/thread/{u3['id']}",
+        headers={"Authorization": f"Bearer {t1}"}
+    )
+    assert thread_res1.status_code == 200
+    msgs = thread_res1.json()
+    assert any(m["message_text"] == "Hello Ramesh from test!" for m in msgs)
+
+    # User 3 fetches the thread with User 1: MUST see the message
+    thread_res3 = client.get(
+        f"/api/v1/chat/thread/{u1['id']}",
+        headers={"Authorization": f"Bearer {t3}"}
+    )
+    assert thread_res3.status_code == 200
+    assert any(m["message_text"] == "Hello Ramesh from test!" for m in thread_res3.json())
+
+    # PRIVACY ISOLATION TEST: User 2 (Third party) requests messages with User 1
+    # User 2 MUST NOT see the conversation between User 1 and User 3!
+    thread_res_u2 = client.get(
+        f"/api/v1/chat/thread/{u1['id']}",
+        headers={"Authorization": f"Bearer {t2}"}
+    )
+    assert thread_res_u2.status_code == 200
+    # User 2 has not messaged User 1, so thread MUST NOT contain User 3's message!
+    assert not any(m["message_text"] == "Hello Ramesh from test!" for m in thread_res_u2.json())
+
+    # User 2 requests their conversations list: MUST NOT contain User 3
+    convs_u2 = client.get("/api/v1/chat/conversations", headers={"Authorization": f"Bearer {t2}"}).json()
+    assert not any(c.get("partner_id") == u3["id"] for c in convs_u2)
+

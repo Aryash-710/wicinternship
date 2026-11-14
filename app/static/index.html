@@ -280,6 +280,11 @@
           ➕ <span id="nav-post-job">Post Work (Employer)</span>
         </button>
 
+        <!-- Messages & Private Chat Tab (Common for Worker & Employer) -->
+        <button id="nav-btn-chat" class="tab-btn" onclick="switchTab('tab-chat', this)">
+          💬 <span id="nav-chat">Messages</span> <span id="chat-unread-badge" class="badge" style="display:none; background:#ef4444; color:white; font-size:0.7rem; padding:1px 6px; border-radius:999px;">0</span>
+        </button>
+
         <!-- Common Tab (Scoped to User's Queries) -->
         <button id="nav-btn-matching" class="tab-btn" onclick="switchTab('tab-matching', this)">
           🎯 <span id="nav-matching">Smart Matcher</span>
@@ -675,6 +680,73 @@ Press 📞 CALL or dial from any real mobile phone!
               <div style="font-weight:600; margin-bottom:0.3rem; font-size:0.85rem; color:var(--text-muted);">Live TwiML / Voice XML Payload:</div>
               <pre id="twiml-display" style="background:#0f172a; color:#38bdf8; padding:0.75rem; border-radius:6px; font-size:0.75rem; overflow-x:auto; max-height:160px; white-space:pre-wrap;">&lt;!-- Press CALL to inspect generated TwiML XML --&gt;</pre>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. PRIVATE MESSAGES & CHAT TAB (Strictly 1-to-1 Isolated) -->
+      <div id="tab-chat" class="tab-pane">
+        <div style="margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+          <div>
+            <h2 style="font-size:1.35rem; display:flex; align-items:center; gap:0.5rem;">
+              💬 Direct 1-to-1 Private Messages
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.88rem;">
+              End-to-end isolated messages. Only you and the person you are chatting with can see this thread.
+            </p>
+          </div>
+          <button class="btn btn-secondary" onclick="loadConversations()" style="font-size:0.85rem; padding:0.4rem 0.8rem;">
+            🔄 Refresh Chats
+          </button>
+        </div>
+
+        <div class="chat-layout">
+          <!-- Sidebar: Conversations List -->
+          <div class="chat-sidebar">
+            <div class="chat-sidebar-header">
+              <span>Chats</span>
+              <span id="chat-conv-count" class="badge" style="background:#e2e8f0; color:#334155; font-size:0.75rem;">0</span>
+            </div>
+            <div id="chat-conversation-list" class="conversation-list">
+              <!-- Dynamically populated via loadConversations() -->
+              <div style="padding:1.5rem 1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">
+                Loading your conversations...
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Chat Panel -->
+          <div class="chat-main" id="chat-main-panel">
+            <!-- Active Chat Header -->
+            <div class="chat-main-header" id="chat-header" style="display:none;">
+              <div>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  <strong id="chat-partner-name" style="font-size:1rem; color:var(--text-main);">...</strong>
+                  <span id="chat-partner-role-badge" class="badge" style="font-size:0.72rem;">...</span>
+                </div>
+                <div id="chat-job-context" style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;"></div>
+              </div>
+              <div style="font-size:0.82rem; color:#0369a1; font-weight:600;" id="chat-partner-phone"></div>
+            </div>
+
+            <!-- Messages Scroll Area -->
+            <div id="chat-messages-container" class="chat-messages-scroll">
+              <div id="chat-placeholder" style="margin:auto; text-align:center; color:var(--text-muted); max-width:320px; padding:2rem 1rem;">
+                <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔒</div>
+                <div style="font-weight:700; color:#334155; margin-bottom:0.3rem;">Private 1-to-1 Messaging</div>
+                <p style="font-size:0.85rem; line-height:1.4;">
+                  Select a chat from the left or click <strong>💬 Message</strong> on any job or worker card to begin.
+                </p>
+              </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <form id="chat-input-form" class="chat-input-bar" onsubmit="handleSendChatMessage(event)" style="display:none;">
+              <input type="text" id="chat-input-text" class="form-control" placeholder="Type a private message..." autocomplete="off" required>
+              <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.2rem; display:inline-flex; align-items:center; gap:0.4rem;">
+                Send 📨
+              </button>
+            </form>
           </div>
         </div>
       </div>

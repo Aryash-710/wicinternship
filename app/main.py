@@ -18,7 +18,8 @@ from app.routers import (
     wage,
     contact,
     telecom,
-    auth
+    auth,
+    chat
 )
 
 # Logging configuration
@@ -63,6 +64,7 @@ app.include_router(wage.router)
 app.include_router(contact.router)
 app.include_router(telecom.router)
 app.include_router(auth.router)
+app.include_router(chat.router)
 
 # Mount Static Files for Dashboard UI
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -102,6 +104,7 @@ def health_check():
             "wage_prediction": "UP",
             "contact": "UP",
             "ivr_telecom": "UP",
-            "auth": "UP"
+            "auth": "UP",
+            "chat": "UP"
         }
     }

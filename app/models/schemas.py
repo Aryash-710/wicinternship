@@ -236,3 +236,46 @@ class AuthTokenResponse(BaseModel):
     user: UserResponse
     message: str = "Authenticated successfully"
 
+
+# ==========================================
+# Real Private Chat & Messaging Schemas
+# ==========================================
+class MessageSendRequest(BaseModel):
+    receiver_id: int
+    message_text: str = Field(..., min_length=1, max_length=2000)
+    job_id: Optional[int] = None
+
+
+class MessageItem(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: int
+    job_id: Optional[int] = None
+    message_text: str
+    is_read: bool = False
+    is_mine: bool = False
+    created_at: str
+    sender_name: Optional[str] = None
+    sender_role: Optional[str] = None
+    receiver_name: Optional[str] = None
+    receiver_role: Optional[str] = None
+
+
+class ConversationItem(BaseModel):
+    other_user_id: int
+    other_user_name: str
+    other_user_role: str
+    other_user_phone: str
+    other_user_trade: Optional[str] = None
+    other_user_company: Optional[str] = None
+    last_message: str
+    last_message_at: str
+    unread_count: int = 0
+    job_id: Optional[int] = None
+    job_title: Optional[str] = None
+
+
+class ChatInitiateRequest(BaseModel):
+    target_type: str  # 'job' or 'worker'
+    target_id: int
+
