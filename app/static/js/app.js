@@ -1043,7 +1043,7 @@ async function startIvrCall(phone) {
     }
 
     lastIvrAudioText = data.prompt_audio_text;
-    speakVoice(lastIvrAudioText);
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText);
   } catch (e) {
     screen.innerText = "Call failed to connect.\nPlease verify backend service is running.";
     updateCallStatusBadge("Failed", false);
@@ -1072,7 +1072,7 @@ async function sendIvrDigits(digits) {
     }
 
     lastIvrAudioText = data.prompt_audio_text;
-    speakVoice(lastIvrAudioText);
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText);
 
     if (digits === "1") {
       loadWorkerFeed();
@@ -1091,10 +1091,40 @@ async function sendIvrDigits(digits) {
   }
 }
 
+// Speak a bilingual prompt with [ಕನ್ನಡ]: ... \n[हिन्दी]: ... markers.
+// Falls back to speaking the whole text if markers are absent.
+function speakBilingualPrompt(promptText) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+
+  var knMatch = promptText.match(/\[ಕನ್ನಡ\]:\s*([\s\S]+?)(?=\[हिन्दी\]:|$)/);
+  var hiMatch = promptText.match(/\[हिन्दी\]:\s*([\s\S]+?)$/);
+
+  if (knMatch && hiMatch) {
+    var knText = knMatch[1].trim();
+    var hiText = hiMatch[1].trim();
+
+    var uttKn = new SpeechSynthesisUtterance(knText);
+    uttKn.lang = "kn-IN";
+    uttKn.rate = 0.9;
+    uttKn.pitch = 1.0;
+
+    var uttHi = new SpeechSynthesisUtterance(hiText);
+    uttHi.lang = "hi-IN";
+    uttHi.rate = 0.9;
+    uttHi.pitch = 1.0;
+
+    window.speechSynthesis.speak(uttKn);
+    window.speechSynthesis.speak(uttHi);
+  } else {
+    speakVoice(promptText);
+  }
+}
+
 function speakVoice(text) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  var utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 0.95;
   utterance.pitch = 1.0;
   window.speechSynthesis.speak(utterance);
@@ -1102,9 +1132,9 @@ function speakVoice(text) {
 
 function speakCurrentPrompt() {
   if (lastIvrAudioText) {
-    speakVoice(lastIvrAudioText);
+    speakBilingualPrompt(lastIvrAudioText);
   } else {
-    speakVoice("ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಾಯಿಸಲು 1 ಒತ್ತಿ.");
+    speakBilingualPrompt("[ಕನ್ನಡ]: ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಾಯಿಸಲು 1 ಒತ್ತಿ.\n[हिन्दी]: नमस्कार, श्रमसेतु में आपका स्वागत है। श्रमिक प्रोफ़ाइल दर्ज करने के लिए 1 दबाएं।");
   }
 }
 

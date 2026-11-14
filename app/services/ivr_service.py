@@ -111,7 +111,7 @@ class IVRService:
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Gather numDigits="1" action="/api/v1/telecom/ivr" method="POST" timeout="10">
-        <Say language="kn-IN" voice="Polly.Aditi">{prompt_kn}</Say>
+        <Say language="kn-IN">{prompt_kn}</Say>
         <Say language="hi-IN" voice="Polly.Aditi">{prompt_hi}</Say>
     </Gather>
     <Say language="kn-IN">ಯಾವುದೇ ಆಯ್ಕೆ ಸ್ವೀಕರಿಸಲಾಗಿಲ್ಲ. ಧನ್ಯವಾದಗಳು.</Say>
@@ -159,7 +159,7 @@ class IVRService:
 
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say language="kn-IN" voice="Polly.Aditi">{msg_kn}</Say>
+    <Say language="kn-IN">{msg_kn}</Say>
     <Say language="hi-IN" voice="Polly.Aditi">{msg_hi}</Say>
     <Hangup/>
 </Response>"""
@@ -192,7 +192,7 @@ class IVRService:
 
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say language="kn-IN" voice="Polly.Aditi">{msg_kn}</Say>
+    <Say language="kn-IN">{msg_kn}</Say>
     <Say language="hi-IN" voice="Polly.Aditi">{msg_hi}</Say>
     <Hangup/>
 </Response>"""
@@ -228,7 +228,7 @@ class IVRService:
 
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say language="kn-IN" voice="Polly.Aditi">{msg_kn}</Say>
+    <Say language="kn-IN">{msg_kn}</Say>
     <Say language="hi-IN" voice="Polly.Aditi">{msg_hi}</Say>
     <Hangup/>
 </Response>"""
@@ -253,7 +253,7 @@ class IVRService:
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say language="kn-IN">{msg_kn}</Say>
-    <Say language="hi-IN">{msg_hi}</Say>
+    <Say language="hi-IN" voice="Polly.Aditi">{msg_hi}</Say>
     <Hangup/>
 </Response>"""
 
