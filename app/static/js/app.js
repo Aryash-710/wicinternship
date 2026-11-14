@@ -4,14 +4,14 @@
 const I18N = {
   en: {
     badge: "Microservices",
-    subtitle: "ಕಾಯಕಸೇತು • श्रमसेतु — Connecting Workers & Employers with Smart Matching, Fair Wage & Regional USSD/IVR",
+    subtitle: "ಕಾಯಕಸೇತು • श्रमसेतु — Connecting Workers & Employers with Smart Matching, Fair Wage & Regional Voice IVR",
     navJobs: "Job Feed",
     navWorkers: "Workers Feed",
     navMatching: "Smart Matcher",
     navWage: "Fair Wage Predictor",
     navPostJob: "Post Work (Employer)",
     navRegWorker: "Worker Registration",
-    navPhone: "Feature Phone (USSD & IVR)",
+    navPhone: "IVR Voice Simulator",
     statWorkers: "Registered Workers:",
     statJobs: "Open Jobs:",
     statContacts: "Active Inquiries:",
@@ -23,14 +23,14 @@ const I18N = {
   },
   kn: {
     badge: "ಮೈಕ್ರೋಸರ್ವೀಸಸ್",
-    subtitle: "ಕಾಯಕಸೇತು — ಕಾರ್ಮಿಕರು ಮತ್ತು ಉದ್ಯೋಗದಾತರನ್ನು ಬೆಸೆಯುವ ಸ್ಮಾರ್ಟ್ ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ (ಕನ್ನಡ & ಹಿಂದಿ USSD/IVR ಸೇರಿದಂತೆ)",
+    subtitle: "ಕಾಯಕಸೇತು — ಕಾರ್ಮಿಕರು ಮತ್ತು ಉದ್ಯೋಗದಾತರನ್ನು ಬೆಸೆಯುವ ಸ್ಮಾರ್ಟ್ ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ (ಕನ್ನಡ & ಹಿಂದಿ ಧ್ವನಿ IVR ಸೇರಿದಂತೆ)",
     navJobs: "ಕೆಲಸಗಳ ಫೀಡ್",
     navWorkers: "ಕಾರ್ಮಿಕರ ಪಟ್ಟಿ",
     navMatching: "ಸ್ಮಾರ್ಟ್ ಮ್ಯಾಚಿಂಗ್",
     navWage: "ನ್ಯಾಯಯುತ ದಿನಗೂಲಿ",
     navPostJob: "ಕೆಲಸ ಪ್ರಕಟಿಸಿ (ಉದ್ಯೋಗದಾತ)",
     navRegWorker: "ಕಾರ್ಮಿಕರ ನೋಂದಣಿ",
-    navPhone: "ಫೋನ್ ಸಿಮ್ಯುಲೇಟರ್ (USSD/IVR)",
+    navPhone: "ಧ್ವನಿ ಕರೆ ಸಿಮ್ಯುಲೇಟರ್ (IVR)",
     statWorkers: "ನೋಂದಾಯಿತ ಕಾರ್ಮಿಕರು:",
     statJobs: "ಲಭ್ಯವಿರುವ ಕೆಲಸಗಳು:",
     statContacts: "ಸಂಪರ್ಕಗಳು:",
@@ -42,14 +42,14 @@ const I18N = {
   },
   hi: {
     badge: "माइक्रोसर्विसेज",
-    subtitle: "श्रमसेतु — कामगारों और नियोक्ताओं को जोड़ने वाला स्मार्ट मंच (कन्नड़ और हिंदी USSD/IVR सहित)",
+    subtitle: "श्रमसेतु — कामगारों और नियोक्ताओं को जोड़ने वाला स्मार्ट मंच (कन्नड़ और हिंदी वॉयस IVR सहित)",
     navJobs: "काम की सूची",
     navWorkers: "कामगारों की सूची",
     navMatching: "स्मार्ट मैचिंग",
     navWage: "उचित मजदूरी कैलकुलेटर",
     navPostJob: "काम पोस्ट करें (नियोक्ता)",
     navRegWorker: "श्रमिक पंजीकरण",
-    navPhone: "फोन सिमुलेटर (USSD/IVR)",
+    navPhone: "वॉयस कॉल सिमुलेटर (IVR)",
     statWorkers: "पंजीकृत कामगार:",
     statJobs: "उपलब्ध काम:",
     statContacts: "संपर्क अनुरोध:",
@@ -64,54 +64,382 @@ const I18N = {
 let currentLang = "en";
 let activeContactTarget = null;
 
-// USSD / IVR State
-let telecomSessionId = "sess_" + Math.floor(Math.random() * 100000);
-let currentTelecomMode = "ussd"; // 'ussd' or 'ivr'
+// Authentication State
+let currentUser = null;
+let authToken = localStorage.getItem("kaayaka_auth_token") || null;
+
+// IVR Telecom Call State
+let telecomSessionId = "CALL_" + Math.floor(Math.random() * 100000);
+let isIvrCallActive = false;
 let lastIvrAudioText = "";
 
 // ============================================================================
 // Initialization
 // ============================================================================
-document.addEventListener("DOMContentLoaded", () => {
-  loadInsights();
-  loadJobFeed();
-  loadWorkerFeed();
-  populateMatchingDropdowns();
+document.addEventListener("DOMContentLoaded", async () => {
+  await initAuth();
   updatePhoneClock();
   setInterval(updatePhoneClock, 30000);
 });
+
+// ============================================================================
+// Authentication & Role-Based UI Filtering
+// ============================================================================
+async function initAuth() {
+  authToken = localStorage.getItem("kaayaka_auth_token") || null;
+  if (!authToken) {
+    showAuthScreen();
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/auth/me", {
+      headers: { "Authorization": `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      currentUser = await res.json();
+      openMainDashboard();
+    } else {
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem("kaayaka_auth_token");
+      showAuthScreen();
+    }
+  } catch (e) {
+    console.warn("Auth check failed:", e);
+    showAuthScreen();
+  }
+}
+
+function showAuthScreen() {
+  const authScreen = document.getElementById("auth-screen");
+  const mainApp = document.getElementById("main-app-screen");
+  if (authScreen) authScreen.style.display = "flex";
+  if (mainApp) mainApp.style.display = "none";
+  showAuthTab('signin');
+}
+
+function openMainDashboard() {
+  if (!currentUser) {
+    showAuthScreen();
+    return;
+  }
+
+  const authScreen = document.getElementById("auth-screen");
+  const mainApp = document.getElementById("main-app-screen");
+  if (authScreen) authScreen.style.display = "none";
+  if (mainApp) mainApp.style.display = "block";
+
+  // Update User Profile Badge in top header
+  const userBadge = document.getElementById("auth-user-badge");
+  const isWorker = currentUser.role === "worker";
+  const roleColor = isWorker ? "#15803d" : "#0284c7";
+  const roleBg = isWorker ? "#dcfce7" : "#e0f2fe";
+  const roleEmoji = isWorker ? "👷" : "🏢";
+  const roleLabel = isWorker ? "WORKER" : "EMPLOYER";
+  const displayName = isWorker 
+    ? `${currentUser.full_name} (${currentUser.trade || 'Worker'})`
+    : (currentUser.company_name || currentUser.full_name);
+
+  if (userBadge) {
+    userBadge.innerHTML = `
+      <div style="display:flex; align-items:center; gap:0.45rem; background:${roleBg}; padding:0.25rem 0.75rem; border-radius:999px; border:1px solid ${roleColor}40;">
+        <span style="font-size:0.75rem; font-weight:800; color:${roleColor};">${roleEmoji} ${roleLabel}</span>
+        <span style="font-size:0.82rem; font-weight:700; color:#1e293b; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          ${displayName}
+        </span>
+      </div>
+    `;
+  }
+
+  // Enforce Strict Role Separation
+  const navBtnJobs = document.getElementById("nav-btn-jobs");
+  const navBtnWorkers = document.getElementById("nav-btn-workers");
+  const navBtnMatching = document.getElementById("nav-btn-matching");
+  const navBtnWage = document.getElementById("nav-btn-wage");
+  const navBtnPostJob = document.getElementById("nav-btn-post-job");
+  const navBtnPhone = document.getElementById("nav-btn-phone-simulator");
+
+  const tabJobs = document.getElementById("tab-jobs");
+  const tabWorkers = document.getElementById("tab-workers");
+  const tabMatching = document.getElementById("tab-matching");
+  const tabWage = document.getElementById("tab-wage");
+  const tabPostJob = document.getElementById("tab-post-job");
+  const tabPhone = document.getElementById("tab-phone-simulator");
+  const matchScopeBadge = document.getElementById("match-scope-badge");
+
+  if (isWorker) {
+    // -----------------------------------------------------------------
+    // WORKER PROFILE:
+    // MUST NOT SEE: Workers Feed, Post Work Service
+    // -----------------------------------------------------------------
+    if (navBtnWorkers) navBtnWorkers.style.display = "none";
+    if (tabWorkers) tabWorkers.style.display = "none";
+    if (navBtnPostJob) navBtnPostJob.style.display = "none";
+    if (tabPostJob) tabPostJob.style.display = "none";
+
+    // MUST SEE: Job Feed, Smart Matcher, Fair Wage, IVR Simulator
+    if (navBtnJobs) navBtnJobs.style.display = "inline-flex";
+    if (tabJobs) tabJobs.style.display = "block";
+    if (navBtnMatching) navBtnMatching.style.display = "inline-flex";
+    if (navBtnWage) navBtnWage.style.display = "inline-flex";
+    if (navBtnPhone) navBtnPhone.style.display = "inline-flex";
+
+    if (matchScopeBadge) {
+      matchScopeBadge.innerText = `🔒 Scoped to ${currentUser.full_name} (${currentUser.trade})`;
+      matchScopeBadge.style.background = "#dcfce7";
+      matchScopeBadge.style.color = "#15803d";
+    }
+
+    const callerIdInput = document.getElementById("phone-caller-id");
+    if (callerIdInput && currentUser.phone) {
+      callerIdInput.value = currentUser.phone;
+    }
+
+    // Default to Job Feed
+    switchTab("tab-jobs", navBtnJobs);
+    loadJobFeed();
+  } else {
+    // -----------------------------------------------------------------
+    // EMPLOYER PROFILE:
+    // MUST NOT SEE: Worker Registration, Job Feed, IVR Service
+    // -----------------------------------------------------------------
+    if (navBtnJobs) navBtnJobs.style.display = "none";
+    if (tabJobs) tabJobs.style.display = "none";
+    if (navBtnPhone) navBtnPhone.style.display = "none";
+    if (tabPhone) tabPhone.style.display = "none";
+
+    // MUST SEE: Workers Feed, Post Work, Smart Matcher, Fair Wage
+    if (navBtnWorkers) navBtnWorkers.style.display = "inline-flex";
+    if (tabWorkers) tabWorkers.style.display = "block";
+    if (navBtnPostJob) navBtnPostJob.style.display = "inline-flex";
+    if (navBtnMatching) navBtnMatching.style.display = "inline-flex";
+    if (navBtnWage) navBtnWage.style.display = "inline-flex";
+
+    if (matchScopeBadge) {
+      matchScopeBadge.innerText = `🔒 Scoped to ${displayName}'s Open Jobs`;
+      matchScopeBadge.style.background = "#e0f2fe";
+      matchScopeBadge.style.color = "#0369a1";
+    }
+
+    // Pre-fill employer contact in Post Work form
+    const phoneInput = document.getElementById("job-employer-phone");
+    const nameInput = document.getElementById("job-employer-name");
+    if (phoneInput && currentUser.phone) phoneInput.value = currentUser.phone;
+    if (nameInput) nameInput.value = displayName;
+
+    // Default to Workers Feed
+    switchTab("tab-workers", navBtnWorkers);
+    loadWorkerFeed();
+  }
+
+  loadInsights();
+  populateMatchingDropdowns();
+}
+
+function showAuthTab(tab) {
+  const btnSignin = document.getElementById("tab-btn-signin");
+  const btnWorker = document.getElementById("tab-btn-worker");
+  const btnEmployer = document.getElementById("tab-btn-employer");
+
+  const secSignin = document.getElementById("section-signin");
+  const secWorker = document.getElementById("section-worker");
+  const secEmployer = document.getElementById("section-employer");
+  const title = document.getElementById("auth-box-title");
+  const alertBox = document.getElementById("auth-screen-alert");
+
+  if (alertBox) alertBox.style.display = "none";
+
+  [btnSignin, btnWorker, btnEmployer].forEach(b => { if (b) b.classList.remove("active"); });
+  [secSignin, secWorker, secEmployer].forEach(s => { if (s) s.style.display = "none"; });
+
+  if (tab === "signin") {
+    if (btnSignin) btnSignin.classList.add("active");
+    if (secSignin) secSignin.style.display = "block";
+    if (title) title.innerText = "Sign In to Your Workspace";
+  } else if (tab === "worker") {
+    if (btnWorker) btnWorker.classList.add("active");
+    if (secWorker) secWorker.style.display = "block";
+    if (title) title.innerText = "Register as Blue-Collar Worker";
+  } else if (tab === "employer") {
+    if (btnEmployer) btnEmployer.classList.add("active");
+    if (secEmployer) secEmployer.style.display = "block";
+    if (title) title.innerText = "Register as Employer / Contractor";
+  }
+}
+
+function showAuthAlert(msg, isError = false) {
+  const box = document.getElementById("auth-screen-alert");
+  if (!box) return;
+  box.style.display = "block";
+  box.style.background = isError ? "#fee2e2" : "#dcfce7";
+  box.style.color = isError ? "#991b1b" : "#166534";
+  box.style.border = `1px solid ${isError ? '#f87171' : '#86efac'}`;
+  box.innerText = msg;
+}
+
+async function handleSignIn(e) {
+  e.preventDefault();
+  const ident = document.getElementById("si-identifier").value.trim();
+  const pass = document.getElementById("si-password").value;
+
+  try {
+    const res = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username_or_phone: ident, password: pass })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthAlert(data.detail || "Invalid login credentials. Please check username and password.", true);
+      return;
+    }
+
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem("kaayaka_auth_token", authToken);
+    showAuthAlert(`Signed in successfully as ${currentUser.full_name} (${currentUser.role.toUpperCase()})! Opening dashboard...`, false);
+    setTimeout(() => {
+      openMainDashboard();
+    }, 350);
+  } catch (err) {
+    showAuthAlert("Network error while connecting to auth server.", true);
+  }
+}
+
+async function directDemoLogin(username, password) {
+  try {
+    const res = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username_or_phone: username, password: password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem("kaayaka_auth_token", authToken);
+      showAuthAlert(`Welcome ${currentUser.full_name}! Opening ${currentUser.role.toUpperCase()} workspace...`, false);
+      setTimeout(() => {
+        openMainDashboard();
+      }, 300);
+    } else {
+      showAuthAlert(data.detail || "Demo login failed", true);
+    }
+  } catch (e) {
+    showAuthAlert("Error signing in with demo account", true);
+  }
+}
+
+async function handleRegister(e, role) {
+  e.preventDefault();
+  let payload = { role: role };
+
+  if (role === "worker") {
+    payload.full_name = document.getElementById("reg-w-name").value.trim();
+    payload.phone = document.getElementById("reg-w-phone").value.trim();
+    payload.username = document.getElementById("reg-w-user").value.trim();
+    payload.password = document.getElementById("reg-w-pass").value;
+    payload.trade = document.getElementById("reg-w-trade").value;
+    payload.daily_rate = parseFloat(document.getElementById("reg-w-rate").value) || 850;
+    payload.experience_years = parseInt(document.getElementById("reg-w-exp").value) || 3;
+    payload.city = document.getElementById("reg-w-city").value;
+  } else {
+    payload.full_name = document.getElementById("reg-e-name").value.trim();
+    payload.company_name = document.getElementById("reg-e-comp").value.trim() || payload.full_name;
+    payload.phone = document.getElementById("reg-e-phone").value.trim();
+    payload.username = document.getElementById("reg-e-user").value.trim();
+    payload.password = document.getElementById("reg-e-pass").value;
+    payload.city = document.getElementById("reg-e-city").value;
+  }
+
+  try {
+    const res = await fetch("/api/v1/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthAlert(data.detail || "Registration failed.", true);
+      return;
+    }
+
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem("kaayaka_auth_token", authToken);
+    showAuthAlert(`Account created successfully as ${role.toUpperCase()}! Opening dashboard...`, false);
+    setTimeout(() => {
+      openMainDashboard();
+    }, 350);
+  } catch (e) {
+    showAuthAlert("Network error while registering account.", true);
+  }
+}
+
+function handleLogout() {
+  if (authToken) {
+    fetch("/api/v1/auth/logout", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${authToken}` }
+    });
+  }
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem("kaayaka_auth_token");
+  showAuthScreen();
+}
 
 function changeLanguage(lang) {
   currentLang = lang;
   const t = I18N[lang] || I18N.en;
 
-  document.getElementById("lbl-badge").innerText = t.badge;
-  document.getElementById("lbl-subtitle").innerText = t.subtitle;
-  document.getElementById("nav-jobs").innerText = t.navJobs;
-  document.getElementById("nav-workers").innerText = t.navWorkers;
-  document.getElementById("nav-matching").innerText = t.navMatching;
-  document.getElementById("nav-wage").innerText = t.navWage;
-  document.getElementById("nav-postJob") ? document.getElementById("nav-postJob").innerText = t.navPostJob : null;
-  document.getElementById("nav-register-worker").innerText = t.navRegWorker;
-  document.getElementById("nav-phone").innerText = t.navPhone;
-  document.getElementById("lbl-stat-workers").innerText = t.statWorkers;
-  document.getElementById("lbl-stat-jobs").innerText = t.statJobs;
-  document.getElementById("lbl-stat-contacts").innerText = t.statContacts;
-  document.getElementById("lbl-stat-location").innerText = t.statLocation;
-  document.getElementById("job-feed-title").innerText = t.jobFeedTitle;
-  document.getElementById("job-feed-subtitle").innerText = t.jobFeedSubtitle;
-  document.getElementById("worker-feed-title").innerText = t.workerFeedTitle;
-  document.getElementById("worker-feed-subtitle").innerText = t.workerFeedSubtitle;
+  const badgeEl = document.getElementById("lbl-badge"); if (badgeEl) badgeEl.innerText = t.badge;
+  const subEl = document.getElementById("lbl-subtitle"); if (subEl) subEl.innerText = t.subtitle;
+  const nj = document.getElementById("nav-jobs"); if (nj) nj.innerText = t.navJobs;
+  const nw = document.getElementById("nav-workers"); if (nw) nw.innerText = t.navWorkers;
+  const nm = document.getElementById("nav-matching"); if (nm) nm.innerText = t.navMatching;
+  const nwg = document.getElementById("nav-wage"); if (nwg) nwg.innerText = t.navWage;
+  const np = document.getElementById("nav-post-job"); if (np) np.innerText = t.navPostJob;
+  const nph = document.getElementById("nav-phone"); if (nph) nph.innerText = t.navPhone;
+  const sw = document.getElementById("lbl-stat-workers"); if (sw) sw.innerText = t.statWorkers;
+  const sj = document.getElementById("lbl-stat-jobs"); if (sj) sj.innerText = t.statJobs;
+  const sc = document.getElementById("lbl-stat-contacts"); if (sc) sc.innerText = t.statContacts;
+  const sl = document.getElementById("lbl-stat-location"); if (sl) sl.innerText = t.statLocation;
+  const jt = document.getElementById("job-feed-title"); if (jt) jt.innerText = t.jobFeedTitle;
+  const js = document.getElementById("job-feed-subtitle"); if (js) js.innerText = t.jobFeedSubtitle;
+  const wt = document.getElementById("worker-feed-title"); if (wt) wt.innerText = t.workerFeedTitle;
+  const ws = document.getElementById("worker-feed-subtitle"); if (ws) ws.innerText = t.workerFeedSubtitle;
 }
 
 function switchTab(tabId, btn) {
-  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  // Guard role permissions: prevent worker from switching to employer tabs and vice-versa
+  if (currentUser) {
+    if (currentUser.role === "worker") {
+      if (tabId === "tab-workers" || tabId === "tab-post-job" || tabId === "tab-register-worker") return;
+    } else if (currentUser.role === "employer") {
+      if (tabId === "tab-jobs" || tabId === "tab-register-worker" || tabId === "tab-phone-simulator") return;
+    }
+  }
+
+  document.querySelectorAll(".tab-pane").forEach(p => {
+    p.classList.remove("active");
+    p.style.display = "none";
+  });
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  document.getElementById(tabId).classList.add("active");
+
+  const targetPane = document.getElementById(tabId);
+  if (targetPane) {
+    targetPane.classList.add("active");
+    targetPane.style.display = "block";
+  }
   if (btn) btn.classList.add("active");
 
   if (tabId === "tab-matching") {
     populateMatchingDropdowns();
+  } else if (tabId === "tab-jobs") {
+    loadJobFeed();
+  } else if (tabId === "tab-workers") {
+    loadWorkerFeed();
   }
 }
 
@@ -122,11 +450,11 @@ async function loadInsights() {
   try {
     const res = await fetch("/api/v1/feeds/insights");
     const data = await res.json();
-    document.getElementById("stat-total-workers").innerText = data.total_workers || 0;
-    document.getElementById("stat-open-jobs").innerText = data.open_jobs || 0;
-    document.getElementById("stat-total-contacts").innerText = data.total_contacts || 0;
+    document.getElementById("stat-total-workers").innerText = data.total_registered_workers;
+    document.getElementById("stat-open-jobs").innerText = data.open_job_vacancies;
+    document.getElementById("stat-total-contacts").innerText = data.active_inquiries;
   } catch (err) {
-    console.error("Failed to load insights", err);
+    console.error("Failed to load insights:", err);
   }
 }
 
@@ -137,116 +465,95 @@ async function loadJobFeed() {
   const trade = document.getElementById("filter-job-trade").value;
   const city = document.getElementById("filter-job-city").value;
   const grid = document.getElementById("job-feed-grid");
-  grid.innerHTML = "<p>Loading active job opportunities...</p>";
+  grid.innerHTML = "<p>Loading job postings...</p>";
 
-  let url = `/api/v1/feeds/jobs?limit=50`;
-  if (trade) url += `&trade=${encodeURIComponent(trade)}`;
-  if (city) url += `&city=${encodeURIComponent(city)}`;
+  const params = new URLSearchParams();
+  if (trade) params.append("trade", trade);
+  if (city) params.append("city", city);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(`/api/v1/feeds/jobs?${params.toString()}`);
     const jobs = await res.json();
     grid.innerHTML = "";
 
     if (!jobs || jobs.length === 0) {
-      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 2rem; color:var(--text-muted);">
-        No jobs found matching your filters. Try selecting 'All Trades' or 'All Cities'.
-      </div>`;
+      grid.innerHTML = "<p>No active jobs found matching your criteria.</p>";
       return;
     }
 
     jobs.forEach(job => {
       const card = document.createElement("div");
       card.className = "card";
-      const isUrgent = job.urgency === "urgent";
-
       card.innerHTML = `
         <div>
           <div class="card-header">
-            <div>
-              <span class="badge badge-trade">${job.trade}</span>
-              ${isUrgent ? '<span class="badge badge-urgent">⚡ URGENT</span>' : ''}
-            </div>
-            <div class="wage-badge">₹${job.wage_offered} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">/${job.payment_type}</span></div>
+            <span class="badge badge-trade">${job.trade}</span>
+            ${job.urgency === 'urgent' ? '<span class="badge badge-urgent">⚡ Urgent / ತುರ್ತು</span>' : ''}
           </div>
           <h3 class="card-title">${job.title}</h3>
-          <p style="font-size:0.85rem; color:#475569; margin: 0.5rem 0;">${job.description || 'General requirements'}</p>
+          <p style="font-size:0.9rem; color:var(--text-muted); margin:0.4rem 0;">${job.description || 'No description provided.'}</p>
           <div class="card-meta">
-            <span>📍 ${job.area || ''}, ${job.city} ${job.distance_km ? `(${job.distance_km} km away)` : ''}</span>
-            <span>👤 Employer: ${job.employer_name}</span>
-            <span>⏱️ Duration: ${job.duration_days} day(s) • Needed: ${job.workers_needed} worker(s)</span>
+            <span>📍 ${job.area || ''}, ${job.city}</span>
+            <span>💰 Offered: <strong>₹${job.wage_offered}</strong> / ${job.payment_type}</span>
+            <span>⏳ Duration: ${job.duration_days} Day(s) • Needed: ${job.workers_needed} Worker(s)</span>
+            <span>🏢 Posted by: ${job.employer_name}</span>
           </div>
         </div>
-        <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-          <button class="btn btn-primary" style="flex:1;" onclick="openContactModal('job', ${job.id}, '${job.employer_name}', '${job.employer_phone}', '${job.title}')">
-            📞 Contact Employer
-          </button>
-          <a class="btn btn-secondary" style="padding:0.6rem;" href="https://wa.me/91${job.employer_phone}?text=Hello%20${encodeURIComponent(job.employer_name)},%20I%20am%20interested%20in%20your%20job%20posting%20for%20${encodeURIComponent(job.title)}" target="_blank" title="WhatsApp Message">
-            💬
-          </a>
-        </div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('job', ${job.id}, '${job.employer_name}', '${job.employer_phone}', '${job.title}')">
+          📞 Apply / Call Employer
+        </button>
       `;
       grid.appendChild(card);
     });
   } catch (err) {
-    grid.innerHTML = "<p>Error loading jobs. Please check if backend is running.</p>";
+    grid.innerHTML = "<p>Error loading jobs.</p>";
   }
 }
 
 // ============================================================================
-// Workers Feed Microservice
+// Worker Feed Microservice
 // ============================================================================
 async function loadWorkerFeed() {
   const trade = document.getElementById("filter-worker-trade").value;
   const city = document.getElementById("filter-worker-city").value;
   const grid = document.getElementById("worker-feed-grid");
-  grid.innerHTML = "<p>Loading qualified workers...</p>";
+  grid.innerHTML = "<p>Loading skilled workers...</p>";
 
-  let url = `/api/v1/feeds/workers?limit=50`;
-  if (trade) url += `&trade=${encodeURIComponent(trade)}`;
-  if (city) url += `&city=${encodeURIComponent(city)}`;
+  const params = new URLSearchParams();
+  if (trade) params.append("trade", trade);
+  if (city) params.append("city", city);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(`/api/v1/feeds/workers?${params.toString()}`);
     const workers = await res.json();
     grid.innerHTML = "";
 
     if (!workers || workers.length === 0) {
-      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 2rem; color:var(--text-muted);">
-        No workers found matching your filters.
-      </div>`;
+      grid.innerHTML = "<p>No workers currently registered matching these filters.</p>";
       return;
     }
 
     workers.forEach(w => {
       const card = document.createElement("div");
       card.className = "card";
-
       card.innerHTML = `
         <div>
           <div class="card-header">
-            <div>
-              <span class="badge badge-trade">${w.trade}</span>
-              <span class="badge" style="background:#e0f2fe; color:#0369a1;">⭐ ${w.rating || 4.5}</span>
-            </div>
-            <div class="wage-badge">₹${w.daily_rate} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">/day</span></div>
+            <span class="badge badge-trade">${w.trade}</span>
+            <span class="badge badge-score">⭐ ${w.rating} / 5.0</span>
           </div>
           <h3 class="card-title">${w.name}</h3>
-          <p style="font-size:0.85rem; color:#475569; margin: 0.5rem 0;">Skills: ${w.secondary_skills || 'General skill set'}</p>
           <div class="card-meta">
             <span>📍 ${w.area || ''}, ${w.city}</span>
-            <span>💼 ${w.experience_years} years experience • ${w.jobs_completed || 0} jobs done</span>
-            <span>🗣️ Spoken: ${w.language_pref} • Registered via: ${w.source.toUpperCase()}</span>
+            <span>🛠️ Skills: ${w.secondary_skills || w.trade}</span>
+            <span>📅 Experience: ${w.experience_years} Years (${w.jobs_completed} jobs done)</span>
+            <span>💰 Rate: <strong>₹${w.daily_rate}</strong> / day</span>
+            <span>🗣️ Language: ${w.language_pref.toUpperCase()}</span>
           </div>
         </div>
-        <div style="display:flex; gap:0.5rem; margin-top:1rem;">
-          <button class="btn btn-primary" style="flex:1;" onclick="openContactModal('worker', ${w.id}, '${w.name}', '${w.phone}', '${w.trade}')">
-            📞 Direct Hire Inquiry
-          </button>
-          <a class="btn btn-secondary" style="padding:0.6rem;" href="https://wa.me/91${w.phone}?text=Hello%20${encodeURIComponent(w.name)},%20I%20have%20a%20work%20opportunity%20for%20${encodeURIComponent(w.trade)}" target="_blank" title="WhatsApp Message">
-            💬
-          </a>
-        </div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="openContactModal('worker', ${w.id}, '${w.name}', '${w.phone}', '${w.trade}')">
+          📞 Hire & Contact Worker
+        </button>
       `;
       grid.appendChild(card);
     });
@@ -256,66 +563,108 @@ async function loadWorkerFeed() {
 }
 
 // ============================================================================
-// Smart Job Matcher Microservice
+// Smart Job Matcher (Role-Scoped: Only User's Queries Shown)
 // ============================================================================
 async function populateMatchingDropdowns() {
-  const mode = document.getElementById("match-mode").value;
   const select = document.getElementById("match-target-select");
   const label = document.getElementById("lbl-match-target");
-  select.innerHTML = "<option>Loading options...</option>";
+  const note = document.getElementById("match-query-note");
+  const modeGroup = document.getElementById("match-mode-group");
+  const resultsContainer = document.getElementById("match-results-container");
+  if (!select) return;
 
-  if (mode === "worker_to_jobs") {
-    label.innerText = "Select Worker Profile (ಕಾರ್ಮಿಕ):";
-    try {
-      const res = await fetch("/api/v1/workers/?limit=30");
-      const workers = await res.json();
+  if (resultsContainer) resultsContainer.innerHTML = "";
+
+  if (!currentUser) {
+    select.innerHTML = "<option>Please sign in to view your personalized matches</option>";
+    return;
+  }
+
+  // User is Logged In: Strictly Scoped to their queries!
+  if (modeGroup) modeGroup.style.display = "none";
+  select.innerHTML = "<option>Fetching your queries...</option>";
+
+  try {
+    const res = await fetch(`/api/v1/match/my-queries?phone=${currentUser.phone}`, {
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
+    });
+    const data = await res.json();
+
+    if (currentUser.role === "worker") {
+      if (label) label.innerText = "Your Worker Profile Query:";
+      if (note) note.innerHTML = `🔒 <strong>Scoped Match:</strong> Computing jobs matched specifically to <strong>${currentUser.full_name}</strong> (${currentUser.trade} in ${currentUser.city}).`;
       select.innerHTML = "";
-      workers.forEach(w => {
-        select.innerHTML += `<option value="${w.id}">${w.name} - ${w.trade} (${w.city}, Rate: ₹${w.daily_rate}/day)</option>`;
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  } else {
-    label.innerText = "Select Job Opening (ಉದ್ಯೋಗ):";
-    try {
-      const res = await fetch("/api/v1/jobs/?status=open&limit=30");
-      const jobs = await res.json();
+      if (data.queries && data.queries.length > 0) {
+        data.queries.forEach(q => {
+          select.innerHTML += `<option value="${q.id}" selected>${q.label}</option>`;
+        });
+        runMatching();
+      } else {
+        select.innerHTML = `<option value="">No linked worker profile found</option>`;
+      }
+    } else {
+      // Employer
+      if (label) label.innerText = "Select Your Job Opening (Your Postings Only):";
+      if (note) note.innerHTML = `🔒 <strong>Scoped Match:</strong> Only job openings created by <strong>${currentUser.company_name || currentUser.full_name}</strong> are displayed. Other employers' data is hidden.`;
       select.innerHTML = "";
-      jobs.forEach(j => {
-        select.innerHTML += `<option value="${j.id}">${j.title} - ${j.trade} (${j.city}, Offer: ₹${j.wage_offered})</option>`;
-      });
-    } catch (e) {
-      console.error(e);
+      if (data.queries && data.queries.length > 0) {
+        data.queries.forEach(q => {
+          select.innerHTML += `<option value="${q.id}">${q.label}</option>`;
+        });
+        runMatching();
+      } else {
+        select.innerHTML = `<option value="">No open jobs posted yet</option>`;
+        if (resultsContainer) {
+          resultsContainer.innerHTML = `
+            <div style="text-align:center; padding:2rem; background:white; border-radius:12px; border:1px solid var(--border-color);">
+              <h3 style="margin-bottom:0.5rem;">No Open Jobs Posted Yet</h3>
+              <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Post a work requirement first to match skilled candidate workers.</p>
+              <button class="btn btn-primary" onclick="switchTab('tab-post-job', document.getElementById('nav-btn-post-job'))">
+                ➕ Post Work Now
+              </button>
+            </div>
+          `;
+        }
+      }
     }
+  } catch (err) {
+    select.innerHTML = "<option>Error loading queries.</option>";
   }
 }
 
 function toggleMatchMode() {
   populateMatchingDropdowns();
-  document.getElementById("match-results-container").innerHTML = "";
 }
 
 async function runMatching() {
-  const mode = document.getElementById("match-mode").value;
-  const targetId = document.getElementById("match-target-select").value;
   const container = document.getElementById("match-results-container");
+  const targetId = document.getElementById("match-target-select").value;
 
-  if (!targetId) {
-    alert("Please select a target first.");
-    return;
-  }
+  if (!targetId) return;
 
   container.innerHTML = "<p style='text-align:center; padding:1.5rem;'>Computing multi-factor matching scores...</p>";
 
-  const url = mode === "worker_to_jobs"
-    ? `/api/v1/match/worker/${targetId}/jobs?max_radius_km=60`
-    : `/api/v1/match/job/${targetId}/workers?max_radius_km=60`;
+  let url;
+  if (currentUser) {
+    url = `/api/v1/match/my-matches?phone=${currentUser.phone}&target_id=${targetId}&max_radius_km=60`;
+  } else {
+    const mode = document.getElementById("match-mode").value;
+    url = mode === "worker_to_jobs"
+      ? `/api/v1/match/worker/${targetId}/jobs?max_radius_km=60`
+      : `/api/v1/match/job/${targetId}/workers?max_radius_km=60`;
+  }
 
   try {
-    const res = await fetch(url);
-    const matches = await res.json();
+    const res = await fetch(url, {
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
+    });
+    const resultData = await res.json();
     container.innerHTML = "";
+
+    const matches = Array.isArray(resultData) ? resultData : (resultData.matches || []);
+    const isWorkerToJobs = currentUser
+      ? (currentUser.role === "worker")
+      : (document.getElementById("match-mode").value === "worker_to_jobs");
 
     if (!matches || matches.length === 0) {
       container.innerHTML = `<div style="text-align:center; padding:2rem; background:white; border-radius:12px; border:1px solid var(--border-color);">
@@ -333,7 +682,7 @@ async function runMatching() {
       const b = m.breakdown;
       const score = m.match_score;
 
-      if (mode === "worker_to_jobs") {
+      if (isWorkerToJobs) {
         const j = m.job;
         card.innerHTML = `
           <div>
@@ -457,6 +806,9 @@ async function handleWagePrediction(e) {
 // ============================================================================
 async function handlePostJob(e) {
   e.preventDefault();
+  const employerName = document.getElementById("job-employer-name").value || (currentUser ? currentUser.company_name || currentUser.full_name : "Employer");
+  const employerPhone = document.getElementById("job-employer-phone").value || (currentUser ? currentUser.phone : "9900000000");
+
   const payload = {
     title: document.getElementById("job-title").value,
     trade: document.getElementById("job-trade").value,
@@ -465,8 +817,8 @@ async function handlePostJob(e) {
     area: document.getElementById("job-area").value,
     wage_offered: parseFloat(document.getElementById("job-wage").value),
     duration_days: parseInt(document.getElementById("job-duration").value),
-    employer_name: document.getElementById("job-employer-name").value,
-    employer_phone: document.getElementById("job-employer-phone").value,
+    employer_name: employerName,
+    employer_phone: employerPhone,
     description: document.getElementById("job-desc").value
   };
 
@@ -481,7 +833,13 @@ async function handlePostJob(e) {
       document.getElementById("post-job-form").reset();
       loadJobFeed();
       loadInsights();
-      switchTab("tab-jobs", document.querySelectorAll(".tab-btn")[0]);
+
+      // Switch employer straight to candidate matching for their newly posted job!
+      if (currentUser && currentUser.role === "employer") {
+        switchTab("tab-matching", document.getElementById("nav-btn-matching"));
+      } else {
+        switchTab("tab-workers", document.getElementById("nav-btn-workers"));
+      }
     } else {
       const err = await res.json();
       alert("Error: " + JSON.stringify(err.detail));
@@ -520,7 +878,7 @@ async function handleWorkerRegistration(e) {
       document.getElementById("worker-register-form").reset();
       loadWorkerFeed();
       loadInsights();
-      switchTab("tab-workers", document.querySelectorAll(".tab-btn")[1]);
+      switchTab("tab-workers", document.getElementById("nav-btn-workers"));
     } else {
       const err = await res.json();
       alert("Error: " + JSON.stringify(err.detail));
@@ -552,44 +910,47 @@ function openContactModal(targetType, targetId, name, phone, titleOrTrade) {
 
 function closeContactModal() {
   document.getElementById("contact-modal").classList.remove("active");
-  activeContactTarget = null;
 }
 
 async function submitContactRequest() {
-  if (!activeContactTarget) return;
-  const msg = document.getElementById("modal-message").value || "Interested in work collaboration.";
+  const msg = document.getElementById("modal-message").value.trim();
+  if (!msg) {
+    alert("Please enter a short message.");
+    return;
+  }
 
-  const payload = {
-    sender_type: activeContactTarget.targetType === "job" ? "worker" : "employer",
-    sender_id: 1, // Simulated active logged in user
-    receiver_type: activeContactTarget.targetType,
-    receiver_id: activeContactTarget.targetId,
-    job_id: activeContactTarget.targetType === "job" ? activeContactTarget.targetId : null,
-    message: msg
-  };
+  const senderType = activeContactTarget.targetType === "job" ? "worker" : "employer";
+  const receiverType = activeContactTarget.targetType === "job" ? "employer" : "worker";
+  const senderId = currentUser ? currentUser.id : 1;
 
   try {
     const res = await fetch("/api/v1/contact/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        sender_type: senderType,
+        sender_id: senderId,
+        receiver_type: receiverType,
+        receiver_id: activeContactTarget.targetId,
+        message: msg
+      })
     });
     const data = await res.json();
 
-    // Trigger instant simulated SMS dispatch
+    // Auto-dispatch simulated SMS
     const smsRes = await fetch(`/api/v1/contact/${data.id}/dispatch-sms`, { method: "POST" });
     const smsData = await smsRes.json();
 
-    alert(`Inquiry Sent!\nSimulated SMS Notification:\n"${smsData.notification_text}"`);
+    alert(`Inquiry Dispatched Successfully!\n\nSMS Sent to: ${smsData.target_phone}\nMessage: "${smsData.notification_text}"`);
     closeContactModal();
     loadInsights();
   } catch (e) {
-    alert("Failed to initiate contact.");
+    alert("Error sending inquiry.");
   }
 }
 
 // ============================================================================
-// Virtual Feature Phone Simulator (USSD & IVR)
+// Virtual IVR Voice Simulator
 // ============================================================================
 function updatePhoneClock() {
   const now = new Date();
@@ -599,123 +960,86 @@ function updatePhoneClock() {
   if (clockEl) clockEl.innerText = `${hours}:${minutes}`;
 }
 
-function switchTelecomMode() {
-  const mode = document.getElementById("telecom-mode").value;
-  currentTelecomMode = mode;
-  const screen = document.getElementById("screen-text");
-  const inputBar = document.getElementById("phone-dial-input");
-  const audioControls = document.getElementById("ivr-audio-controls");
-
-  if (mode === "ussd") {
-    inputBar.value = "*345#";
-    screen.innerText = "KaayakaSetu Gateway\nMode: USSD (*345#)\nDial *345# and press CALL to start in Kannada or Hindi.";
-    audioControls.style.display = "none";
-  } else {
-    inputBar.value = "1800-KAYAKA";
-    screen.innerText = "Voice IVR Gateway\nMode: Voice Call\nPress CALL to connect to Kannada/Hindi Voice Assistant.";
-    audioControls.style.display = "block";
-  }
+function updateCallStatusBadge(status, isLive) {
+  const badge = document.getElementById("call-status-badge");
+  if (!badge) return;
+  badge.innerText = status;
+  badge.style.background = isLive ? "#16a34a" : "#0284c7";
 }
 
 function pressKey(key) {
   const input = document.getElementById("phone-dial-input");
   input.value += key;
 
-  // In IVR mode, send DTMF immediately if call is active
-  if (currentTelecomMode === "ivr" && input.value.length === 1 && !isNaN(key)) {
+  if (isIvrCallActive) {
     sendIvrDigits(key);
     input.value = "";
   }
 }
 
 async function handlePhoneCallBtn() {
-  const input = document.getElementById("phone-dial-input");
-  const val = input.value.trim();
   const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
-
-  if (currentTelecomMode === "ussd") {
-    await sendUssdInput(val, phone);
-    input.value = "";
-  } else {
-    // Start or interact with IVR call
-    await startIvrCall(phone);
-  }
+  await startIvrCall(phone);
 }
 
 function handlePhoneEndBtn() {
   const screen = document.getElementById("screen-text");
   const input = document.getElementById("phone-dial-input");
+  const xmlDisplay = document.getElementById("twiml-display");
 
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 
-  fetch(`/api/v1/telecom/ussd/reset?session_id=${telecomSessionId}`, { method: "POST" });
-  telecomSessionId = "sess_" + Math.floor(Math.random() * 100000);
+  isIvrCallActive = false;
+  updateCallStatusBadge("Ended", false);
 
-  if (currentTelecomMode === "ussd") {
-    screen.innerText = "Call Ended.\nSession closed.\nDial *345# to start again.";
-    input.value = "*345#";
-  } else {
-    screen.innerText = "Call Terminated.\nThank you for calling KaayakaSetu.";
-    input.value = "1800-KAYAKA";
-  }
-}
+  fetch(`/api/v1/telecom/ivr/reset?call_sid=${telecomSessionId}`, { method: "POST" });
+  telecomSessionId = "CALL_" + Math.floor(Math.random() * 100000);
 
-async function sendUssdInput(val, phone) {
-  const screen = document.getElementById("screen-text");
-  screen.innerText = "Connecting to USSD Gateway...";
-
-  try {
-    const res = await fetch("/api/v1/telecom/ussd", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: telecomSessionId,
-        phone_number: phone,
-        user_input: val
-      })
-    });
-    const data = await res.json();
-    // Format message display
-    const cleanMsg = data.message.replace(/^(CON|END)\s+/, "");
-    screen.innerText = cleanMsg;
-
-    if (data.action === "END") {
-      telecomSessionId = "sess_" + Math.floor(Math.random() * 100000);
-      loadWorkerFeed();
-      loadInsights();
-    }
-  } catch (err) {
-    screen.innerText = "USSD Connection Failed.\nPlease retry.";
+  screen.innerText = "Call Terminated.\n\nThank you for calling KaayakaSetu (1800-KAYAKA).\nPress CALL to start a new voice session.";
+  if (input) input.value = "";
+  if (xmlDisplay) {
+    xmlDisplay.innerText = "<!-- Call ended. TwiML session closed. -->";
   }
 }
 
 async function startIvrCall(phone) {
   const screen = document.getElementById("screen-text");
-  screen.innerText = "📞 Calling 1800-KAYAKA...\nConnecting...";
+  const xmlDisplay = document.getElementById("twiml-display");
+  screen.innerText = "📞 Dialing 1800-KAYAKA...\nConnecting to Voice Gateway...";
+  updateCallStatusBadge("Connecting...", false);
 
   try {
     const res = await fetch("/api/v1/telecom/ivr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        call_sid: "CALL_" + telecomSessionId,
+        call_sid: telecomSessionId,
         caller_phone: phone,
         digits: ""
       })
     });
     const data = await res.json();
-    screen.innerText = `📞 ACTIVE CALL\n\n${data.prompt_text}\n\nPress 1 or 2 on keypad.`;
+    isIvrCallActive = true;
+    updateCallStatusBadge("Live Call", true);
+
+    screen.innerText = `📞 ACTIVE CALL (1800-KAYAKA)\n\n${data.prompt_text}\n\n[Press 1, 2, or 3 on keypad]`;
+    if (xmlDisplay) {
+      xmlDisplay.innerText = data.twiml_xml || "<!-- No TwiML -->";
+    }
+
     lastIvrAudioText = data.prompt_audio_text;
     speakVoice(lastIvrAudioText);
   } catch (e) {
-    screen.innerText = "Call failed to connect.";
+    screen.innerText = "Call failed to connect.\nPlease verify backend service is running.";
+    updateCallStatusBadge("Failed", false);
   }
 }
 
 async function sendIvrDigits(digits) {
   const screen = document.getElementById("screen-text");
+  const xmlDisplay = document.getElementById("twiml-display");
   const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
 
   try {
@@ -723,20 +1047,31 @@ async function sendIvrDigits(digits) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        call_sid: "CALL_" + telecomSessionId,
+        call_sid: telecomSessionId,
         caller_phone: phone,
         digits: digits
       })
     });
     const data = await res.json();
-    screen.innerText = `📞 ACTIVE CALL\n\n${data.prompt_text}`;
+    screen.innerText = `📞 ACTIVE CALL (DTMF: ${digits})\n\n${data.prompt_text}`;
+    if (xmlDisplay) {
+      xmlDisplay.innerText = data.twiml_xml || "<!-- No TwiML -->";
+    }
+
     lastIvrAudioText = data.prompt_audio_text;
     speakVoice(lastIvrAudioText);
 
+    if (digits === "1") {
+      loadWorkerFeed();
+      loadInsights();
+    }
+
     if (data.action === "hangup") {
+      isIvrCallActive = false;
+      updateCallStatusBadge("Completed", false);
       setTimeout(() => {
-        screen.innerText += "\n\n[Call Finished - Hung up]";
-      }, 4000);
+        screen.innerText += "\n\n[Call completed - Audio hung up]";
+      }, 3500);
     }
   } catch (e) {
     screen.innerText = "Error transmitting DTMF tone.";
@@ -747,7 +1082,7 @@ function speakVoice(text) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.9;
+  utterance.rate = 0.95;
   utterance.pitch = 1.0;
   window.speechSynthesis.speak(utterance);
 }
@@ -756,6 +1091,6 @@ function speakCurrentPrompt() {
   if (lastIvrAudioText) {
     speakVoice(lastIvrAudioText);
   } else {
-    speakVoice("ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ.");
+    speakVoice("ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಾಯಿಸಲು 1 ಒತ್ತಿ.");
   }
 }

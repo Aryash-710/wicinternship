@@ -37,7 +37,7 @@ Microservices Loaded:
   * Location & Geodesic Service   -> /api/v1/location
   * Fair Wage Predictor           -> /api/v1/wage
   * Direct Contact & SMS Bridge   -> /api/v1/contact
-  * Regional USSD & IVR Gateway   -> /api/v1/telecom
+  * Regional IVR Voice Gateway    -> /api/v1/telecom
     [Kannada (ಕನ್ನಡ) & Hindi (हिन्दी) Enabled]
 ================================================================================
 """

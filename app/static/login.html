@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In & Register | KaayakaSetu (ಕಾಯಕಸೇತು • श्रमसेतु)</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .auth-page-wrapper {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%);
+    }
+    .auth-box {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+      max-width: 540px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .auth-header {
+      background: #f8fafc;
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--border-color);
+      text-align: center;
+    }
+    .auth-body {
+      padding: 2rem;
+    }
+    .auth-tab-buttons {
+      display: flex;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 1.5rem;
+    }
+    .auth-tab-btn {
+      flex: 1;
+      padding: 0.75rem 0.5rem;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .auth-tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: #f8fafc;
+    }
+    .demo-pill-btn {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .demo-pill-btn:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-page-wrapper">
+
+    <!-- Brand Header -->
+    <div style="text-align:center; color:white; margin-bottom:1.5rem;">
+      <h1 style="font-size:1.8rem; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+        🛠️ KaayakaSetu <span class="logo-badge" style="background:#d97706; font-size:0.75rem;">Authentication</span>
+      </h1>
+      <p style="color:#94a3b8; font-size:0.95rem; margin-top:0.3rem;">
+        ಕಾಯಕಸೇತು • श्रमसेतु — Connecting Workers & Employers
+      </p>
+    </div>
+
+    <!-- Main Auth Card -->
+    <div class="auth-box">
+      <div class="auth-header">
+        <h2 style="font-size:1.3rem; color:var(--text-main);" id="page-title">Sign In to Your Workspace</h2>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:0.2rem;">
+          Select your profile role to access tailored services
+        </p>
+      </div>
+
+      <div class="auth-body">
+        <!-- Tab Selectors -->
+        <div class="auth-tab-buttons">
+          <button id="tab-btn-signin" class="auth-tab-btn active" onclick="showAuthTab('signin')">
+            🔑 Sign In
+          </button>
+          <button id="tab-btn-worker" class="auth-tab-btn" onclick="showAuthTab('worker')">
+            👷 Register Worker
+          </button>
+          <button id="tab-btn-employer" class="auth-tab-btn" onclick="showAuthTab('employer')">
+            🏢 Register Employer
+          </button>
+        </div>
+
+        <div id="alert-box" style="display:none; padding:0.75rem 1rem; border-radius:8px; margin-bottom:1.25rem; font-size:0.85rem;"></div>
+
+        <!-- 1. SIGN IN FORM -->
+        <div id="section-signin">
+          <form onsubmit="handleSignIn(event)">
+            <div class="form-group">
+              <label>Username or 10-Digit Mobile Number:</label>
+              <input type="text" id="si-identifier" class="form-control" placeholder="e.g. ramesh_worker or 9845011223" required>
+            </div>
+            <div class="form-group">
+              <label>Password:</label>
+              <input type="password" id="si-password" class="form-control" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; margin-top:0.5rem; justify-content:center; padding:0.75rem;">
+              🚀 Sign In & Enter Dashboard
+            </button>
+          </form>
+
+          <!-- 1-Click Evaluation Accounts -->
+          <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px dashed var(--border-color);">
+            <div style="font-weight:700; font-size:0.82rem; color:var(--text-muted); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.5px;">
+              ⚡ 1-Click Evaluation Logins (No typing required):
+            </div>
+            <div style="display:flex; flex-direction:column; gap:0.5rem;">
+              <button class="demo-pill-btn" onclick="directDemoLogin('ramesh_worker', 'password123')">
+                <div>
+                  <div style="font-weight:700; color:#15803d; font-size:0.9rem;">👷 Ramesh Gowda (Worker Profile)</div>
+                  <div style="font-size:0.78rem; color:#64748b;">Electrician, Bengaluru • ₹850/day</div>
+                </div>
+                <span class="badge" style="background:#dcfce7; color:#166534;">Log In &rarr;</span>
+              </button>
+
+              <button class="demo-pill-btn" onclick="directDemoLogin('manjunatha_traders', 'password123')">
+                <div>
+                  <div style="font-weight:700; color:#0369a1; font-size:0.9rem;">🏢 Shree Manjunatha Traders (Employer Profile)</div>
+                  <div style="font-size:0.78rem; color:#64748b;">Shop Owner, Rajajinagar • Has Open Job Postings</div>
+                </div>
+                <span class="badge" style="background:#e0f2fe; color:#0369a1;">Log In &rarr;</span>
+              </button>
+
+              <button class="demo-pill-btn" onclick="directDemoLogin('manjunath_plumber', 'password123')">
+                <div>
+                  <div style="font-weight:700; color:#15803d; font-size:0.9rem;">👷 Manjunath Patil (Worker Profile)</div>
+                  <div style="font-size:0.78rem; color:#64748b;">Plumber, Malleshwaram • ₹750/day</div>
+                </div>
+                <span class="badge" style="background:#dcfce7; color:#166534;">Log In &rarr;</span>
+              </button>
+
+              <button class="demo-pill-btn" onclick="directDemoLogin('kiran_constructions', 'password123')">
+                <div>
+                  <div style="font-weight:700; color:#0369a1; font-size:0.9rem;">🏢 Kiran Constructions (Employer Profile)</div>
+                  <div style="font-size:0.78rem; color:#64748b;">Contractor, Bengaluru • Masonry Work Posted</div>
+                </div>
+                <span class="badge" style="background:#e0f2fe; color:#0369a1;">Log In &rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. REGISTER WORKER FORM -->
+        <div id="section-worker" style="display:none;">
+          <form onsubmit="handleRegister(event, 'worker')">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Full Name (ಕಾರ್ಮಿಕನ ಹೆಸರು):</label>
+                <input type="text" id="reg-w-name" class="form-control" placeholder="e.g. Suresh Gowda" required>
+              </div>
+              <div class="form-group">
+                <label>10-Digit Mobile Number:</label>
+                <input type="text" id="reg-w-phone" class="form-control" placeholder="9845012345" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Username:</label>
+                <input type="text" id="reg-w-user" class="form-control" placeholder="e.g. suresh_electrician" required>
+              </div>
+              <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="reg-w-pass" class="form-control" placeholder="Create password" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Trade / Skill (ವೃತ್ತಿ):</label>
+                <select id="reg-w-trade" class="form-control" required>
+                  <option value="Electrician">Electrician</option>
+                  <option value="Plumber">Plumber</option>
+                  <option value="Mason">Mason</option>
+                  <option value="Carpenter">Carpenter</option>
+                  <option value="Painter">Painter</option>
+                  <option value="Helper">General Helper / Labour</option>
+                  <option value="Welder">Welder</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Expected Daily Wage (ದಿನಗೂಲಿ ₹):</label>
+                <input type="number" id="reg-w-rate" class="form-control" value="850" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City (ನಗರ):</label>
+                <select id="reg-w-city" class="form-control" required>
+                  <option value="Bengaluru">Bengaluru</option>
+                  <option value="Mysuru">Mysuru</option>
+                  <option value="Hubballi">Hubballi</option>
+                  <option value="Delhi">Delhi</option>
+                  <option value="Lucknow">Lucknow</option>
+                  <option value="Patna">Patna</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Experience (Years):</label>
+                <input type="number" id="reg-w-exp" class="form-control" value="4" required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; margin-top:0.5rem; justify-content:center; padding:0.75rem;">
+              👷 Register Worker Profile & Enter Dashboard
+            </button>
+          </form>
+        </div>
+
+        <!-- 3. REGISTER EMPLOYER FORM -->
+        <div id="section-employer" style="display:none;">
+          <form onsubmit="handleRegister(event, 'employer')">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact Person Name:</label>
+                <input type="text" id="reg-e-name" class="form-control" placeholder="e.g. Anand Kumar" required>
+              </div>
+              <div class="form-group">
+                <label>10-Digit Mobile Number:</label>
+                <input type="text" id="reg-e-phone" class="form-control" placeholder="9900881122" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Company / Contractor / Shop Name (Optional):</label>
+              <input type="text" id="reg-e-comp" class="form-control" placeholder="e.g. Kumar Builders & Interiors">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Username:</label>
+                <input type="text" id="reg-e-user" class="form-control" placeholder="e.g. anand_builders" required>
+              </div>
+              <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="reg-e-pass" class="form-control" placeholder="Create password" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>City (ನಗರ):</label>
+              <select id="reg-e-city" class="form-control" required>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="Mysuru">Mysuru</option>
+                <option value="Hubballi">Hubballi</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Lucknow">Lucknow</option>
+                <option value="Patna">Patna</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; margin-top:0.5rem; justify-content:center; padding:0.75rem;">
+              🏢 Register Employer Profile & Post Work
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+      <!-- Card Footer -->
+      <div style="background:#f8fafc; border-top:1px solid var(--border-color); padding:1rem 2rem; display:flex; justify-content:space-between; align-items:center;">
+        <a href="/" style="color:var(--primary); text-decoration:none; font-weight:600; font-size:0.88rem;">
+          ← Return to Public Dashboard
+        </a>
+        <a href="/docs" target="_blank" style="color:var(--text-muted); text-decoration:none; font-size:0.82rem;">
+          API Documentation
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function showAuthTab(tab) {
+      document.getElementById("tab-btn-signin").classList.remove("active");
+      document.getElementById("tab-btn-worker").classList.remove("active");
+      document.getElementById("tab-btn-employer").classList.remove("active");
+
+      document.getElementById("section-signin").style.display = "none";
+      document.getElementById("section-worker").style.display = "none";
+      document.getElementById("section-employer").style.display = "none";
+
+      const alertBox = document.getElementById("alert-box");
+      alertBox.style.display = "none";
+
+      if (tab === "signin") {
+        document.getElementById("tab-btn-signin").classList.add("active");
+        document.getElementById("section-signin").style.display = "block";
+        document.getElementById("page-title").innerText = "Sign In to Your Workspace";
+      } else if (tab === "worker") {
+        document.getElementById("tab-btn-worker").classList.add("active");
+        document.getElementById("section-worker").style.display = "block";
+        document.getElementById("page-title").innerText = "👷 Register Worker Profile";
+      } else {
+        document.getElementById("tab-btn-employer").classList.add("active");
+        document.getElementById("section-employer").style.display = "block";
+        document.getElementById("page-title").innerText = "🏢 Register Employer Profile";
+      }
+    }
+
+    function showAlert(msg, isError) {
+      const box = document.getElementById("alert-box");
+      box.style.display = "block";
+      box.style.background = isError ? "#fee2e2" : "#dcfce7";
+      box.style.color = isError ? "#991b1b" : "#166534";
+      box.style.border = `1px solid ${isError ? '#fca5a5' : '#86efac'}`;
+      box.innerText = msg;
+    }
+
+    async function handleSignIn(e) {
+      e.preventDefault();
+      const ident = document.getElementById("si-identifier").value.trim();
+      const pass = document.getElementById("si-password").value;
+
+      try {
+        const res = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username_or_phone: ident, password: pass })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showAlert(data.detail || "Invalid credentials. Please retry.", true);
+          return;
+        }
+
+        localStorage.setItem("kaayaka_auth_token", data.token);
+        showAlert(`Signed in as ${data.user.full_name} (${data.user.role.toUpperCase()})! Redirecting...`, false);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 600);
+      } catch (err) {
+        showAlert("Network error communicating with server.", true);
+      }
+    }
+
+    async function directDemoLogin(username, password) {
+      try {
+        const res = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username_or_phone: username, password: password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem("kaayaka_auth_token", data.token);
+          showAlert(`Welcome ${data.user.full_name}! Redirecting to your ${data.user.role} workspace...`, false);
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 400);
+        } else {
+          showAlert(data.detail || "Demo login failed", true);
+        }
+      } catch (e) {
+        showAlert("Error signing in with demo account", true);
+      }
+    }
+
+    async function handleRegister(e, role) {
+      e.preventDefault();
+      let payload = { role: role };
+
+      if (role === "worker") {
+        payload.full_name = document.getElementById("reg-w-name").value.trim();
+        payload.phone = document.getElementById("reg-w-phone").value.trim();
+        payload.username = document.getElementById("reg-w-user").value.trim();
+        payload.password = document.getElementById("reg-w-pass").value;
+        payload.trade = document.getElementById("reg-w-trade").value;
+        payload.daily_rate = parseFloat(document.getElementById("reg-w-rate").value) || 850;
+        payload.experience_years = parseInt(document.getElementById("reg-w-exp").value) || 3;
+        payload.city = document.getElementById("reg-w-city").value;
+      } else {
+        payload.full_name = document.getElementById("reg-e-name").value.trim();
+        payload.company_name = document.getElementById("reg-e-comp").value.trim() || payload.full_name;
+        payload.phone = document.getElementById("reg-e-phone").value.trim();
+        payload.username = document.getElementById("reg-e-user").value.trim();
+        payload.password = document.getElementById("reg-e-pass").value;
+        payload.city = document.getElementById("reg-e-city").value;
+      }
+
+      try {
+        const res = await fetch("/api/v1/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showAlert(data.detail || "Registration failed.", true);
+          return;
+        }
+
+        localStorage.setItem("kaayaka_auth_token", data.token);
+        showAlert(`Account registered successfully as ${role.toUpperCase()}! Redirecting...`, false);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 600);
+      } catch (e) {
+        showAlert("Network error registering account.", true);
+      }
+    }
+  </script>
+</body>
+</html>
+

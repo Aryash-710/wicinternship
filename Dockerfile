@@ -49,3 +49,4 @@ HEALTHCHECK --interval=20s --timeout=5s --start-period=5s --retries=3 \
 
 # Start the unified microservices server
 CMD ["python", "run.py"]
+

@@ -19,7 +19,7 @@ class WorkerBase(BaseModel):
     longitude: Optional[float] = Field(None, examples=[77.5530])
     availability: str = Field(default="available", examples=["available"])  # available, busy, on_call
     language_pref: str = Field(default="kannada", examples=["kannada"])    # kannada, hindi, english
-    source: str = Field(default="web", examples=["web"])                   # web, ussd, ivr
+    source: str = Field(default="web", examples=["web"])                   # web, ivr
 
 
 class WorkerCreate(WorkerBase):
@@ -180,23 +180,11 @@ class FairWageResponse(BaseModel):
 
 
 # ==========================================
-# Telecom (USSD & IVR) Schemas
+# Telecom (IVR Voice) Schemas
 # ==========================================
-class USSDRequest(BaseModel):
-    session_id: str = Field(..., examples=["sess_98450_101"])
-    phone_number: str = Field(..., examples=["9845011223"])
-    user_input: str = Field(default="", examples=["*345#"])  # DTMF or dialed string
-
-
-class USSDResponse(BaseModel):
-    session_id: str
-    message: str
-    action: str = Field(..., examples=["CON"])  # 'CON' to continue session, 'END' to terminate
-
-
 class IVRRequest(BaseModel):
     call_sid: str = Field(..., examples=["CA_ivr_102"])
-    caller_phone: str = Field(..., examples=["9845011223"])
+    caller_phone: str = Field(default="9845011223", examples=["9845011223"])
     digits: Optional[str] = Field(default="", examples=["1"])
 
 
@@ -208,3 +196,43 @@ class IVRResponse(BaseModel):
     language: str
     action: str  # 'gather' or 'hangup'
     options: List[Dict[str, str]]
+
+
+# ==========================================
+# Authentication & User Profile Schemas
+# ==========================================
+class UserRegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, examples=["ramesh_worker"])
+    phone: str = Field(..., min_length=10, max_length=15, examples=["9845011223"])
+    password: str = Field(..., min_length=4, examples=["password123"])
+    role: str = Field(..., examples=["worker"])  # 'worker' or 'employer'
+    full_name: str = Field(..., examples=["Ramesh Gowda"])
+    city: Optional[str] = Field(default="Bengaluru", examples=["Bengaluru"])
+    trade: Optional[str] = Field(default="Electrician", examples=["Electrician"])  # for worker
+    daily_rate: Optional[float] = Field(default=800.0, examples=[800.0])          # for worker
+    experience_years: Optional[int] = Field(default=3, examples=[3])              # for worker
+    company_name: Optional[str] = Field(default=None, examples=["Shree Traders"]) # for employer
+
+
+class UserLoginRequest(BaseModel):
+    username_or_phone: str = Field(..., examples=["ramesh_worker"])
+    password: str = Field(..., examples=["password123"])
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    phone: str
+    role: str
+    full_name: str
+    worker_id: Optional[int] = None
+    city: Optional[str] = None
+    trade: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class AuthTokenResponse(BaseModel):
+    token: str
+    user: UserResponse
+    message: str = "Authenticated successfully"
+

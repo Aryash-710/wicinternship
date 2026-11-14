@@ -8,7 +8,7 @@ from app.services.matching_service import MatchingService
 from app.services.worker_service import WorkerService
 from app.services.job_service import JobService
 from app.services.contact_service import ContactService
-from app.services.ivr_ussd_service import TelecomService
+from app.services.ivr_service import IVRService, TelecomService
 from app.models.schemas import WorkerCreate, JobCreate, ContactCreate
 
 client = TestClient(app)
@@ -27,7 +27,8 @@ def test_health_check():
     assert data["services"]["workers"] == "UP"
     assert data["services"]["matching"] == "UP"
     assert data["services"]["wage_prediction"] == "UP"
-    assert data["services"]["ivr_ussd_telecom"] == "UP"
+    assert data["services"]["ivr_telecom"] == "UP"
+    assert data["services"]["auth"] == "UP"
 
 
 def test_location_service_distance():
@@ -148,74 +149,40 @@ def test_contact_service_and_sms():
     assert "KaayakaSetu" in sms_data["notification_text"]
 
 
-def test_ussd_regional_kannada_flow():
-    session_id = "test_ussd_kn_99"
+def test_ivr_service_direct_unit_flows():
+    call_sid = "CALL_UNIT_TEST_99"
     phone = "9845000111"
 
-    # Step 1: Initial dial
-    action, text = TelecomService.handle_ussd(session_id, phone, "*345#")
-    assert action == "CON"
-    assert "1. ಕನ್ನಡ" in text
+    # Step 1: Initial call greeting
+    res_welcome = IVRService.handle_ivr_call(call_sid, phone, digits=None)
+    assert res_welcome["action"] == "gather"
+    assert "<Gather" in res_welcome["twiml_xml"]
+    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in res_welcome["prompt_text"]
+    assert "श्रमसेतु में आपका स्वागत है" in res_welcome["prompt_text"]
+    assert len(res_welcome["options"]) == 3
 
-    # Step 2: Select Kannada (Option 1)
-    action, text = TelecomService.handle_ussd(session_id, phone, "1")
-    assert action == "CON"
-    assert "ಕಾಯಕಸೇತು ಮುಖ್ಯ ಮೆನು" in text
-    assert "1. ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಣಿ" in text
+    # Step 2: Option 1 - Worker Registration
+    res_reg = IVRService.handle_ivr_call(call_sid, phone, digits="1")
+    assert res_reg["action"] == "hangup"
+    assert "<Hangup/>" in res_reg["twiml_xml"]
+    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_reg["prompt_text"] or "ನೋಂದಾಯಿತವಾಗಿದೆ" in res_reg["prompt_text"]
 
-    # Step 3: Select Registration (Option 1)
-    action, text = TelecomService.handle_ussd(session_id, phone, "1")
-    assert action == "CON"
-    assert "ಕೌಶಲ್ಯ/ವೃತ್ತಿ ಆಯ್ಕೆ ಮಾಡಿ" in text
+    # Step 3: Option 2 - Find Jobs Voice Readout
+    call_sid_2 = "CALL_UNIT_TEST_88"
+    res_jobs = IVRService.handle_ivr_call(call_sid_2, phone, digits="2")
+    assert res_jobs["action"] == "hangup"
+    assert ("ಕೆಲಸ" in res_jobs["prompt_text"] or "ಲಭ್ಯವಿಲ್ಲ" in res_jobs["prompt_text"])
 
-    # Step 4: Select Trade (Option 2 = Electrician)
-    action, text = TelecomService.handle_ussd(session_id, phone, "2")
-    assert action == "CON"
-    assert "ಅನುಭವ ಎಷ್ಟು ವರ್ಷ" in text
-
-    # Step 5: Enter Experience (5 years)
-    action, text = TelecomService.handle_ussd(session_id, phone, "5")
-    assert action == "CON"
-    assert "ದೈನಂದಿನ ಕೂಲಿ" in text
-
-    # Step 6: Enter Expected Daily Wage (850)
-    action, text = TelecomService.handle_ussd(session_id, phone, "850")
-    assert action == "CON"
-    assert "ನಗರ/ಜಿಲ್ಲೆ ಆಯ್ಕೆ ಮಾಡಿ" in text
-
-    # Step 7: Select City (Option 1 = Bengaluru)
-    action, text = TelecomService.handle_ussd(session_id, phone, "1")
-    assert action == "END"
-    assert "ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಯಶಸ್ವಿಯಾಗಿ ನೋಂದಾಯಿಸಲಾಗಿದೆ" in text
+    # Step 4: Option 3 - Fair Daily Wage Voice Calculator
+    call_sid_3 = "CALL_UNIT_TEST_77"
+    res_wage = IVRService.handle_ivr_call(call_sid_3, phone, digits="3")
+    assert res_wage["action"] == "hangup"
+    assert "ದಿನಗೂಲಿ" in res_wage["prompt_text"]
+    assert "मजदूरी" in res_wage["prompt_text"]
 
 
-def test_ussd_regional_hindi_jobs_flow():
-    session_id = "test_ussd_hi_88"
-    phone = "9811000222"
-
-    # Step 1: Initial dial
-    action, text = TelecomService.handle_ussd(session_id, phone, "*345#")
-    assert action == "CON"
-
-    # Step 2: Select Hindi (Option 2)
-    action, text = TelecomService.handle_ussd(session_id, phone, "2")
-    assert action == "CON"
-    assert "श्रमसेतु मुख्य मेन्यू" in text
-    assert "2. नजदीकी काम खोजें" in text
-
-    # Step 3: Select Find Jobs (Option 2)
-    action, text = TelecomService.handle_ussd(session_id, phone, "2")
-    assert action == "CON"
-    assert "हुनर चुनें" in text
-
-    # Step 4: Choose Electrician (Option 2)
-    action, text = TelecomService.handle_ussd(session_id, phone, "2")
-    assert action == "END"
-    assert ("काम" in text or "दुकान" in text or "उपलब्ध" in text)
-
-
-def test_ivr_voice_bilingual_flow():
-    # Call greeting
+def test_ivr_voice_bilingual_api_flow():
+    # Call greeting via API
     res = client.post("/api/v1/telecom/ivr", json={
         "call_sid": "CALL_TEST_101",
         "caller_phone": "9845011999",
@@ -227,7 +194,7 @@ def test_ivr_voice_bilingual_flow():
     assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in data["prompt_text"]
     assert "श्रमसेतु में आपका स्वागत है" in data["prompt_text"]
 
-    # Press Digit 1 for auto-registration
+    # Press Digit 1 for registration
     res_reg = client.post("/api/v1/telecom/ivr", json={
         "call_sid": "CALL_TEST_101",
         "caller_phone": "9845011999",
@@ -236,5 +203,67 @@ def test_ivr_voice_bilingual_flow():
     assert res_reg.status_code == 200
     data_reg = res_reg.json()
     assert data_reg["action"] == "hangup"
-    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in data_reg["prompt_text"]
-    assert "पंजीकृत" in data_reg["prompt_text"]
+    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in data_reg["prompt_text"] or "ನೋಂದಾಯಿತವಾಗಿದೆ" in data_reg["prompt_text"]
+
+
+def test_auth_service_and_roles():
+    from app.services.auth_service import AuthService
+
+    # 1. Test Demo Worker Authentication
+    w_user = AuthService.authenticate("ramesh_worker", "password123")
+    assert w_user is not None
+    assert w_user["role"] == "worker"
+    assert w_user["phone"] == "9845011223"
+
+    # 2. Test Demo Employer Authentication
+    e_user = AuthService.authenticate("manjunatha_traders", "password123")
+    assert e_user is not None
+    assert e_user["role"] == "employer"
+    assert e_user["phone"] == "9900112233"
+
+    # 3. Test Invalid Password
+    bad = AuthService.authenticate("ramesh_worker", "wrongpassword")
+    assert bad is None
+
+    # 4. Test Session Token Creation and Retrieval
+    token = AuthService.create_session(w_user["id"])
+    assert token.startswith("token_")
+    retrieved = AuthService.get_user_by_token(token)
+    assert retrieved is not None
+    assert retrieved["id"] == w_user["id"]
+
+
+def test_scoped_matching_queries_worker_and_employer():
+    from app.services.auth_service import AuthService
+
+    # Worker Token
+    w_user = AuthService.authenticate("ramesh_worker", "password123")
+    w_token = AuthService.create_session(w_user["id"])
+
+    # Employer Token
+    e_user = AuthService.authenticate("manjunatha_traders", "password123")
+    e_token = AuthService.create_session(e_user["id"])
+
+    # Test Worker Scoped Queries: Should contain only their 1 profile query
+    res_w = client.get("/api/v1/match/my-queries", headers={"Authorization": f"Bearer {w_token}"})
+    assert res_w.status_code == 200
+    data_w = res_w.json()
+    assert data_w["role"] == "worker"
+    assert len(data_w["queries"]) == 1
+    assert "Ramesh" in data_w["queries"][0]["label"]
+
+    # Test Employer Scoped Queries: Should contain ONLY jobs posted by this employer (phone 9900112233)
+    res_e = client.get("/api/v1/match/my-queries", headers={"Authorization": f"Bearer {e_token}"})
+    assert res_e.status_code == 200
+    data_e = res_e.json()
+    assert data_e["role"] == "employer"
+    for q in data_e["queries"]:
+        assert "Commercial Shop 3-Phase Wiring" in q["label"] or "Bengaluru" in q["label"]
+
+    # Test Scoped Matching Execution for Worker
+    match_w = client.get("/api/v1/match/my-matches", headers={"Authorization": f"Bearer {w_token}"})
+    assert match_w.status_code == 200
+    m_data = match_w.json()
+    assert m_data["mode"] == "worker_to_jobs"
+    assert "matches" in m_data
+

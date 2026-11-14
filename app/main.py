@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.config import APP_TITLE, APP_DESCRIPTION, APP_VERSION
 from app.database import init_db
@@ -17,7 +17,8 @@ from app.routers import (
     location,
     wage,
     contact,
-    telecom
+    telecom,
+    auth
 )
 
 # Logging configuration
@@ -61,6 +62,7 @@ app.include_router(location.router)
 app.include_router(wage.router)
 app.include_router(contact.router)
 app.include_router(telecom.router)
+app.include_router(auth.router)
 
 # Mount Static Files for Dashboard UI
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -81,6 +83,11 @@ async def serve_ui():
     }
 
 
+@app.get("/login", include_in_schema=False)
+async def serve_login():
+    return RedirectResponse(url="/", status_code=302)
+
+
 @app.get("/health", tags=["System"])
 def health_check():
     return {
@@ -94,6 +101,7 @@ def health_check():
             "location": "UP",
             "wage_prediction": "UP",
             "contact": "UP",
-            "ivr_ussd_telecom": "UP"
+            "ivr_telecom": "UP",
+            "auth": "UP"
         }
     }

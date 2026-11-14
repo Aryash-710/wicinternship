@@ -1,7 +1,7 @@
 # 🛠️ KaayakaSetu (ಕಾಯಕಸೇತು / श्रमसेतु)
 
 ### Microservice Platform for Blue-Collar Workers & Employers
-*Smart Job Matching • Location & Distance • Fair Wage Prediction • Regional Kannada & Hindi USSD & IVR Telecom Gateway*
+*Smart Job Matching • Geodesic Distance • Fair Wage Prediction • Regional Kannada & Hindi Interactive Voice Response (IVR) Gateway*
 
 ---
 
@@ -9,7 +9,7 @@
 
 **KaayakaSetu** is a production-ready, modular Python microservice application designed specifically for the blue-collar workforce (electricians, plumbers, masons, carpenters, painters, welders, helpers, drivers) and employers (households, contractors, businesses).
 
-Because a large segment of India's blue-collar workforce uses feature phones (basic non-smartphones) or prefers regional dialects, **KaayakaSetu provides first-class USSD (`*345#`) and interactive Voice IVR capabilities in Kannada (ಕನ್ನಡ) and Hindi (हिन्दी)** alongside a modern web dashboard and REST API gateway.
+Because a large segment of India's blue-collar workforce uses basic feature phones or prefers regional dialects, **KaayakaSetu provides an Interactive Voice Response (IVR) telephony engine in Kannada (ಕನ್ನಡ) and Hindi (हिन्दी)** alongside a modern web dashboard and REST API gateway. Workers and employers can dial in, listen to voice prompts, and interact using DTMF keypad tones (1, 2, 3) to register profiles, discover matching jobs, and check fair wage rates.
 
 ---
 
@@ -20,9 +20,9 @@ Because a large segment of India's blue-collar workforce uses feature phones (ba
                                   │   Clients & Devices    │
                                   └───────────┬────────────┘
                                               │
-                      ┌───────────────────────┼────────────────────────┐
-                      │ Web Dashboard (UI)    │ Feature Phone (*345#)  │ Voice Call (IVR)
-                      ▼                       ▼                        ▼
+                      ┌───────────────────────┴────────────────────────┐
+                      │ Web Dashboard (UI)    │ Voice Call (IVR / Telephony)
+                      ▼                       ▼
       ┌────────────────────────────────────────────────────────────────────────┐
       │                   FastAPI Unified API Gateway                          │
       └───────────────────────────────────┬────────────────────────────────────┘
@@ -30,8 +30,8 @@ Because a large segment of India's blue-collar workforce uses feature phones (ba
     ┌────────────────┬────────────────────┼───────────────────┬────────────────┐
     ▼                ▼                    ▼                   ▼                ▼
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────────────┐ ┌──────────────┐
-│ Worker       │ │ Jobs         │ │ Smart Match  │ │ Regional Telecom   │ │ Fair Wage    │
-│ Service      │ │ Service      │ │ Engine       │ │ Gateway (USSD/IVR) │ │ Predictor    │
+│ Worker       │ │ Jobs         │ │ Smart Match  │ │ Regional Voice IVR │ │ Fair Wage    │
+│ Service      │ │ Service      │ │ Engine       │ │ Gateway            │ │ Predictor    │
 │ (/workers)   │ │ (/jobs)      │ │ (/match)     │ │ (/telecom)         │ │ (/wage)      │
 └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └─────────┬──────────┘ └──────┬───────┘
        │                │                │                   │                   │
@@ -51,7 +51,7 @@ Because a large segment of India's blue-collar workforce uses feature phones (ba
 - Create and manage blue-collar profiles (electrician, plumber, mason, carpenter, painter, etc.).
 - Daily & hourly wage expectations, years of verified experience, trade specialization.
 - Multi-lingual preference (`kannada`, `hindi`, `english`).
-- Profile sources tracked (`web`, `ussd`, `ivr`).
+- Profile sources tracked (`web`, `ivr`).
 
 ### 2. 💼 Jobs Service (`/api/v1/jobs`)
 - Employers post work vacancies with trade requirements, duration, daily wage, and urgency.
@@ -78,20 +78,95 @@ Protects blue-collar workers from wage exploitation:
 - High-performance geodesic Haversine distance calculator.
 - Built-in geo-coordinate database for major Indian hubs across Karnataka (Bengaluru, Mysuru, Hubballi, Belagavi, Davanagere, etc.) and Hindi-speaking states (Delhi, Lucknow, Patna, Kanpur, Jaipur, Indore).
 
-### 6. 📱 Regional USSD & IVR Service (`/api/v1/telecom`)
-Designed for non-smartphone feature phones:
-- **USSD Engine (`*345#`)**:
-  - Session state machine compliant with telecom standards (`CON` / `END`).
-  - **Kannada & Hindi navigation**: Workers register their trade, experience, wage expectation, and city by pressing 1, 2, 3 on their keypad.
-  - **Job Finder via USSD**: Workers dial `*345#`, select their trade, and immediately get SMS/flash text with the top 3 matching jobs, wage rate, and employer phone number!
-- **IVR Voice Call Engine**:
-  - Dual-language voice prompts with `<Gather>` and `<Say voice="Polly.Aditi">` compatible TwiML/Voice XML.
-  - Generates spoken Kannada and Hindi audio scripts for interactive voice response.
+### 6. 📞 Regional IVR Voice Service (`/api/v1/telecom`)
+Designed for workers and employers on any phone without requiring internet:
+- **Bilingual Voice Engine**: Dual-language voice prompts in Kannada and Hindi with Polly/Neural TTS compatibility (`kn-IN` and `hi-IN`).
+- **TwiML / Voice XML Standards**: Generates `<Response>`, `<Gather>`, `<Say>`, `<Hangup>` markup compatible with **Twilio**, **Exotel**, and other voice gateways.
+- **Keypad DTMF Navigation**:
+  - `Press 1`: Auto-registers worker profile linked to caller ID.
+  - `Press 2`: Narrates available jobs nearby with employer contact numbers.
+  - `Press 3`: Voice calculation of current fair daily wage benchmarks.
+- **Browser Speech Synthesizer Simulator**: Test voice flows directly in the web UI using the built-in virtual feature phone simulator.
 
 ### 7. 🤝 Contact & Communication Service (`/api/v1/contact`)
 - Initiate direct work inquiry between worker and employer.
 - Simulated instant SMS / WhatsApp notification dispatch.
 - Contact acceptance and direct phone number exchange.
+
+---
+
+## 📞 How to Set Up the IVR Service
+
+The IVR service is accessible via REST/JSON for client apps and via standard Voice XML (`TwiML`) for cloud telephony providers like **Twilio**, **Exotel**, or **Plivo**.
+
+### Step 1: Start the KaayakaSetu Server
+```bash
+python run.py
+```
+The application runs on `http://localhost:8000`.
+
+### Step 2: Expose Your Local Server to the Web (for Webhooks)
+Telephony providers need a publicly accessible HTTPS webhook URL to reach your local server.
+Using **ngrok** (or cloudflared):
+```bash
+ngrok http 8000
+```
+Note the HTTPS forwarding URL (e.g. `https://abc1234.ngrok-free.app`).
+
+### Step 3: Configure Your Telephony Provider
+
+#### A. Setting up with Twilio:
+1. Log in to the [Twilio Console](https://console.twilio.com/).
+2. Buy or select a phone number with **Voice** capabilities.
+3. Scroll down to **Voice Configuration**:
+   - Set **"A Call Comes In"** to `Webhook`.
+   - Set URL to: `https://<YOUR-NGROK-URL>/api/v1/telecom/ivr/twiml`
+   - Set HTTP Method to: `HTTP POST`.
+4. Click **Save Configuration**.
+5. Dial your Twilio number from any phone! You will hear the bilingual Kannada & Hindi greeting.
+
+#### B. Setting up with Exotel:
+1. Log in to your [Exotel Dashboard](https://my.exotel.com/).
+2. Go to **App Bazaar** &rarr; **Create Flow**.
+3. Add a **Passthru / Webhook** applet:
+   - URL: `https://<YOUR-NGROK-URL>/api/v1/telecom/ivr/exotel`
+   - Method: `POST`.
+4. Connect your virtual Exotel phone number to this flow.
+
+### Step 4: Testing the IVR Service Locally (No Telephony Provider Needed)
+
+You can test the entire voice flow without any provider:
+
+#### Option 1: Using the Web Dashboard Simulator
+1. Open `http://localhost:8000/` in your browser.
+2. Click the **"📞 IVR Voice Simulator"** tab.
+3. Enter any test phone number (e.g. `9845011223`).
+4. Click **📞 CALL**.
+5. The browser speaks the Kannada and Hindi voice prompts aloud!
+6. Click `1` on the keypad to register, `2` to hear jobs, or `3` to hear wage rates.
+7. Inspect the live generated TwiML XML payload in the right panel.
+
+#### Option 2: Using cURL or Postman
+
+**1. Initial Call (Greeting):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/telecom/ivr" \
+     -H "Content-Type: application/json" \
+     -d '{"call_sid": "CALL_101", "caller_phone": "9845011223", "digits": ""}'
+```
+
+**2. Send DTMF Digit 1 (Register Profile):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/telecom/ivr" \
+     -H "Content-Type: application/json" \
+     -d '{"call_sid": "CALL_101", "caller_phone": "9845011223", "digits": "1"}'
+```
+
+**3. Direct Twilio TwiML Endpoint:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/telecom/ivr/twiml" \
+     -d "CallSid=CA12345&From=%2B919845011223&Digits=2"
+```
 
 ---
 
@@ -122,7 +197,7 @@ python run.py
 
 ## 🐳 Docker Deployment
 
-You can deploy the full **KaayakaSetu** microservices platform in an isolated, production-ready Docker container.
+You can deploy the full **KaayakaSetu** microservices platform in an isolated Docker container.
 
 ### Option A: Using Docker Compose (Recommended)
 
@@ -146,42 +221,11 @@ You can deploy the full **KaayakaSetu** microservices platform in an isolated, p
    docker compose down
    ```
 
-> **Data Persistence:** The SQLite database is automatically persisted in the `kaayakasetu_sqlite_data` Docker volume across container restarts and builds.
-
----
-
-### Option B: Using Docker CLI Directly
-
-1. **Build the image:**
-   ```bash
-   docker build -t kaayakasetu-platform:latest .
-   ```
-
-2. **Run the container with persistent volume:**
-   ```bash
-   docker volume create kaayakasetu_data
-   docker run -d \
-     --name kaayakasetu-platform \
-     -p 8000:8000 \
-     -e HOST=0.0.0.0 \
-     -e PORT=8000 \
-     -v kaayakasetu_data:/app/data \
-     --restart unless-stopped \
-     kaayakasetu-platform:latest
-   ```
-
-3. **Check health and logs:**
-   ```bash
-   docker ps
-   docker logs -f kaayakasetu-platform
-   ```
-
 ---
 
 ## 🧪 Running Automated Tests
 
-Run the full automated test suite covering all microservices:
+Run the unit test suite covering all microservices:
 ```bash
 pytest app/tests/test_services.py -v
 ```
-
