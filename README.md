@@ -1,15 +1,48 @@
 # 🛠️ KaayakaSetu (ಕಾಯಕಸೇತು / श्रमसेतु)
 
-### Microservice Platform for Blue-Collar Workers & Employers
-*Smart Job Matching • Geodesic Distance • Fair Wage Prediction • Regional Kannada & Hindi Interactive Voice Response (IVR) Gateway*
+### Enterprise Blue-Collar Workforce & Employer Microservices Platform
+*Role-Based Authentication • Smart Job Matching • Geodesic Distance • Fair Wage Predictor • Kannada & Hindi Regional IVR Telephony Gateway*
+
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Twilio IVR](https://img.shields.io/badge/Twilio-Voice%20IVR-F22F46.svg)](https://www.twilio.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
 ## 🌟 Overview
 
-**KaayakaSetu** is a production-ready, modular Python microservice application designed specifically for the blue-collar workforce (electricians, plumbers, masons, carpenters, painters, welders, helpers, drivers) and employers (households, contractors, businesses).
+**KaayakaSetu** is a production-grade, modular Python microservice platform designed specifically for the blue-collar workforce (electricians, plumbers, masons, carpenters, painters, welders, helpers) and employers (households, contractors, commercial establishments).
 
-Because a large segment of India's blue-collar workforce uses basic feature phones or prefers regional dialects, **KaayakaSetu provides an Interactive Voice Response (IVR) telephony engine in Kannada (ಕನ್ನಡ) and Hindi (हिन्दी)** alongside a modern web dashboard and REST API gateway. Workers and employers can dial in, listen to voice prompts, and interact using DTMF keypad tones (1, 2, 3) to register profiles, discover matching jobs, and check fair wage rates.
+### Key Highlights:
+1. **Zero-Friction Authentication & Strict Role Separation**:
+   - Secure SHA-256 token-based authentication.
+   - **Worker Workspace**: Live Job Feed, Personal Smart Matching, Fair Wage Predictor, Regional IVR Voice Simulator.
+   - **Employer Workspace**: Available Workers Feed, Post Work Requirement, Candidate Smart Matching, Fair Wage Predictor.
+   - **No Database Leakage**: Smart Matching queries are strictly scoped to the logged-in profile.
+2. **Real-World Twilio Regional Voice IVR (`+1 (737) 250-8034`)**:
+   - Direct integration with Twilio Voice Webhook (`/api/v1/telecom/ivr/twiml`).
+   - Automated bilingual voice menus in **Kannada (ಕನ್ನಡ)** and **Hindi (हिन्दी)** using Amazon Polly Neural TTS (`Polly.Aditi`).
+   - Supports any standard mobile or feature phone without internet.
+3. **Multi-Factor Heuristic Matching Engine**:
+   - Geodesic travel distance calculation (Haversine formula).
+   - Trade compatibility and skill hierarchy overlap.
+   - Wage fairness and budget alignment.
+4. **Fair Wage Prediction Engine**:
+   - Calibrated against Indian economic city tiers (Tier-1, Tier-2, Tier-3).
+   - Experience compounding (+3%/yr) and tool ownership allowances to prevent wage exploitation.
+
+---
+
+## 📞 Live Twilio Hotline
+
+The platform is connected to an active Twilio telecom number:
+
+| Live Hotline | Connected Webhook Endpoint | Regional Languages | Keypad Actions |
+| :--- | :--- | :--- | :--- |
+| **`+1 (737) 250-8034`** | `POST /api/v1/telecom/ivr/twiml` | Kannada (`kn-IN`) & Hindi (`hi-IN`) | `1` Register, `2` Find Jobs, `3` Fair Wage |
+
+> 📱 **How to Test**: Dial **`+17372508034`** from any physical phone worldwide to experience the automated bilingual voice assistant. Alternatively, use the built-in virtual feature phone simulator on the web dashboard.
 
 ---
 
@@ -30,9 +63,9 @@ Because a large segment of India's blue-collar workforce uses basic feature phon
     ┌────────────────┬────────────────────┼───────────────────┬────────────────┐
     ▼                ▼                    ▼                   ▼                ▼
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────────────┐ ┌──────────────┐
-│ Worker       │ │ Jobs         │ │ Smart Match  │ │ Regional Voice IVR │ │ Fair Wage    │
-│ Service      │ │ Service      │ │ Engine       │ │ Gateway            │ │ Predictor    │
-│ (/workers)   │ │ (/jobs)      │ │ (/match)     │ │ (/telecom)         │ │ (/wage)      │
+│ Auth Service │ │ Worker / Job │ │ Smart Match  │ │ Regional Voice IVR │ │ Fair Wage    │
+│ (/auth)      │ │ Feeds        │ │ Engine       │ │ Gateway            │ │ Predictor    │
+│              │ │ (/workers)   │ │ (/match)     │ │ (/telecom)         │ │ (/wage)      │
 └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └─────────┬──────────┘ └──────┬───────┘
        │                │                │                   │                   │
        └────────────────┴───────┬────────┴───────────────────┴───────────────────┘
@@ -45,187 +78,214 @@ Because a large segment of India's blue-collar workforce uses basic feature phon
 
 ---
 
-## 🚀 Key Microservices & Features
+## 🔒 Authentication & Role Separation
 
-### 1. 👷 Worker Profile Service (`/api/v1/workers`)
-- Create and manage blue-collar profiles (electrician, plumber, mason, carpenter, painter, etc.).
-- Daily & hourly wage expectations, years of verified experience, trade specialization.
-- Multi-lingual preference (`kannada`, `hindi`, `english`).
-- Profile sources tracked (`web`, `ivr`).
+The platform enforces a dedicated **Authentication Gate**. The main dashboard opens only after successful authentication.
 
-### 2. 💼 Jobs Service (`/api/v1/jobs`)
-- Employers post work vacancies with trade requirements, duration, daily wage, and urgency.
-- Real-time status tracking (`open`, `in_progress`, `completed`, `cancelled`).
+### Role Separation Matrix:
 
-### 3. 🎯 Smart Job Matching Service (`/api/v1/match`)
-Multi-factor AI/heuristic compatibility engine scoring:
+| Feature / Service | Worker Profile | Employer Profile |
+| :--- | :---: | :---: |
+| **Worker Registration Service** | ❌ Hidden *(Handled at signup)* | ❌ Hidden |
+| **Live Job Feed** | ✅ **Visible** *(Default landing)* | ❌ Hidden |
+| **IVR Voice Simulator** | ✅ **Visible** | ❌ Hidden |
+| **Available Workers Feed** | ❌ Hidden | ✅ **Visible** *(Default landing)* |
+| **Post Work Requirement** | ❌ Hidden | ✅ **Visible** |
+| **Smart Multi-Factor Matcher** | ✅ **Visible** *(Scoped to Worker)* | ✅ **Visible** *(Scoped to Employer)* |
+| **Fair Wage Predictor** | ✅ **Visible** | ✅ **Visible** |
+| **Sign Out Option** | ✅ **Visible** in Header | ✅ **Visible** in Header |
+
+### ⚡ 1-Click Evaluation Accounts (Built-in Demo Logins):
+
+You can test either role instantly from the Login page without typing:
+
+| Role | Username | Password | Profile Description |
+| :--- | :--- | :--- | :--- |
+| 👷 **Worker** | `ramesh_worker` | `password123` | Ramesh Gowda — Electrician, Bengaluru (₹850/day) |
+| 🏢 **Employer** | `manjunatha_traders` | `password123` | Shree Manjunatha Traders — Shop Owner, Rajajinagar |
+| 👷 **Worker** | `manjunath_plumber` | `password123` | Manjunath Patil — Plumber, Malleshwaram (₹750/day) |
+| 🏢 **Employer** | `kiran_constructions` | `password123` | Kiran Constructions — Builder & Contractor, Bengaluru |
+
+---
+
+## 🎯 Smart Matching Microservice (`/api/v1/match`)
+
+Matches are computed using multi-factor heuristic scoring with zero data leakage:
 - **Skill Overlap (40%)**: Exact trade match (100%), related trades (70%), or helper fallback (50%).
-- **Geographic Distance (30%)**: Great-circle Haversine formula (100% for <= 5km, tapering off over radius).
-- **Wage Compatibility (20%)**: Checks if employer offer satisfies worker expectation.
-- **Reliability & Availability (10%)**: Verified star rating and availability status.
-- **Explainability**: Returns transparent reasoning for every match in plain language.
-
-### 4. ⚖️ Fair Wage Prediction Service (`/api/v1/wage`)
-Protects blue-collar workers from wage exploitation:
-- Calibrated against Indian minimum wage benchmarks and market standards.
-- **City Economic Tiers**: Tier-1 (Bengaluru, Delhi, Mumbai: +25%), Tier-2 (Mysuru, Hubballi, Lucknow, Patna: 1.0x baseline), Tier-3 (-15%).
-- **Compounding Experience**: +3% per year of trade experience.
-- **Tool Ownership Premium**: Extra daily allowance (+₹150/day) if workers bring power tools.
-- **Urgency Surcharge**: +20% for same-day emergency calls.
-- **Multi-lingual Explanations**: Generates complete wage rationale in English, **Kannada (ಕನ್ನಡ)**, and **Hindi (हिन्दी)**.
-
-### 5. 📍 Location Service (`/api/v1/location`)
-- High-performance geodesic Haversine distance calculator.
-- Built-in geo-coordinate database for major Indian hubs across Karnataka (Bengaluru, Mysuru, Hubballi, Belagavi, Davanagere, etc.) and Hindi-speaking states (Delhi, Lucknow, Patna, Kanpur, Jaipur, Indore).
-
-### 6. 📞 Regional IVR Voice Service (`/api/v1/telecom`)
-Designed for workers and employers on any phone without requiring internet:
-- **Bilingual Voice Engine**: Dual-language voice prompts in Kannada and Hindi with Polly/Neural TTS compatibility (`kn-IN` and `hi-IN`).
-- **TwiML / Voice XML Standards**: Generates `<Response>`, `<Gather>`, `<Say>`, `<Hangup>` markup compatible with **Twilio**, **Exotel**, and other voice gateways.
-- **Keypad DTMF Navigation**:
-  - `Press 1`: Auto-registers worker profile linked to caller ID.
-  - `Press 2`: Narrates available jobs nearby with employer contact numbers.
-  - `Press 3`: Voice calculation of current fair daily wage benchmarks.
-- **Browser Speech Synthesizer Simulator**: Test voice flows directly in the web UI using the built-in virtual feature phone simulator.
-
-### 7. 🤝 Contact & Communication Service (`/api/v1/contact`)
-- Initiate direct work inquiry between worker and employer.
-- Simulated instant SMS / WhatsApp notification dispatch.
-- Contact acceptance and direct phone number exchange.
+- **Geographic Proximity (30%)**: Great-circle Haversine formula (100% for $\le 5\text{ km}$, tapering over search radius).
+- **Wage Compatibility (20%)**: Checks if employer offer satisfies worker requested wage.
+- **Reliability & Availability (10%)**: Verified star ratings and real-time availability.
+- **User Scoping**:
+  - **Workers** see only jobs matching their linked profile.
+  - **Employers** see only candidates matching their active job postings.
 
 ---
 
-## 📞 How to Set Up the IVR Service
+## ⚖️ Fair Wage Prediction Engine (`/api/v1/wage`)
 
-The IVR service is accessible via REST/JSON for client apps and via standard Voice XML (`TwiML`) for cloud telephony providers like **Twilio**, **Exotel**, or **Plivo**.
-
-### Step 1: Start the KaayakaSetu Server
-```bash
-python run.py
-```
-The application runs on `http://localhost:8000`.
-
-### Step 2: Expose Your Local Server to the Web (for Webhooks)
-Telephony providers need a publicly accessible HTTPS webhook URL to reach your local server.
-Using **ngrok** (or cloudflared):
-```bash
-ngrok http 8000
-```
-Note the HTTPS forwarding URL (e.g. `https://abc1234.ngrok-free.app`).
-
-### Step 3: Configure Your Telephony Provider
-
-#### A. Setting up with Twilio:
-1. Log in to the [Twilio Console](https://console.twilio.com/).
-2. Buy or select a phone number with **Voice** capabilities.
-3. Scroll down to **Voice Configuration**:
-   - Set **"A Call Comes In"** to `Webhook`.
-   - Set URL to: `https://<YOUR-NGROK-URL>/api/v1/telecom/ivr/twiml`
-   - Set HTTP Method to: `HTTP POST`.
-4. Click **Save Configuration**.
-5. Dial your Twilio number from any phone! You will hear the bilingual Kannada & Hindi greeting.
-
-#### B. Setting up with Exotel:
-1. Log in to your [Exotel Dashboard](https://my.exotel.com/).
-2. Go to **App Bazaar** &rarr; **Create Flow**.
-3. Add a **Passthru / Webhook** applet:
-   - URL: `https://<YOUR-NGROK-URL>/api/v1/telecom/ivr/exotel`
-   - Method: `POST`.
-4. Connect your virtual Exotel phone number to this flow.
-
-### Step 4: Testing the IVR Service Locally (No Telephony Provider Needed)
-
-You can test the entire voice flow without any provider:
-
-#### Option 1: Using the Web Dashboard Simulator
-1. Open `http://localhost:8000/` in your browser.
-2. Click the **"📞 IVR Voice Simulator"** tab.
-3. Enter any test phone number (e.g. `9845011223`).
-4. Click **📞 CALL**.
-5. The browser speaks the Kannada and Hindi voice prompts aloud!
-6. Click `1` on the keypad to register, `2` to hear jobs, or `3` to hear wage rates.
-7. Inspect the live generated TwiML XML payload in the right panel.
-
-#### Option 2: Using cURL or Postman
-
-**1. Initial Call (Greeting):**
-```bash
-curl -X POST "http://localhost:8000/api/v1/telecom/ivr" \
-     -H "Content-Type: application/json" \
-     -d '{"call_sid": "CALL_101", "caller_phone": "9845011223", "digits": ""}'
-```
-
-**2. Send DTMF Digit 1 (Register Profile):**
-```bash
-curl -X POST "http://localhost:8000/api/v1/telecom/ivr" \
-     -H "Content-Type: application/json" \
-     -d '{"call_sid": "CALL_101", "caller_phone": "9845011223", "digits": "1"}'
-```
-
-**3. Direct Twilio TwiML Endpoint:**
-```bash
-curl -X POST "http://localhost:8000/api/v1/telecom/ivr/twiml" \
-     -d "CallSid=CA12345&From=%2B919845011223&Digits=2"
-```
+Protects workers against wage exploitation and assists employers with market benchmarking:
+- **City Economic Tiers**:
+  - Tier-1 (Bengaluru, Delhi): Baseline +25%
+  - Tier-2 (Mysuru, Hubballi, Lucknow, Patna): Baseline 1.0x
+  - Tier-3 (Davanagere, Belagavi): Baseline -15%
+- **Experience Compounding**: +3% per year of verified experience.
+- **Power Tool Ownership Allowance**: +₹150/day.
+- **Emergency Surcharge**: +20% for urgent same-day callouts.
+- **Multi-lingual Rationale**: Plain-language explanations generated in English, Kannada, and Hindi.
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (Local Setup)
 
 ### 1. Prerequisites
-- Python 3.10+ installed.
+- Python 3.10 or higher installed.
+- Git.
 
-### 2. Run the Platform
+### 2. Clone and Install
 ```bash
-# Navigate to the project directory
-cd bluecollar_platform
+# Clone the repository
+git clone https://github.com/Aryash-710/wicinternship.git
+cd wicinternship
 
-# Install dependencies (FastAPI, Uvicorn, Pydantic, HTTPX)
+# Install dependencies
 python -m pip install -r requirements.txt
+```
 
-# Start all microservices and web UI
+### 3. Run the Server
+```bash
 python run.py
 ```
 
-### 3. Open in Browser
-- **Interactive Web Dashboard**: `http://localhost:8000/`
-- **Interactive Swagger API Docs**: `http://localhost:8000/docs`
-- **ReDoc Documentation**: `http://localhost:8000/redoc`
-- **System Health Check**: `http://localhost:8000/health`
+### 4. Access the Application
+- **Web Dashboard / Portal**: [http://localhost:8000/](http://localhost:8000/)
+- **Swagger Interactive API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc API Documentation**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **Health Check Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
+
+---
+
+## ☁️ Cloud Deployment on Render
+
+This repository includes a ready-to-use **`render.yaml`** configuration for 1-click cloud deployment on [Render](https://render.com/).
+
+### Option A: Using Render Blueprint (Automated)
+1. In your Render Dashboard, click **New +** &rarr; select **Blueprint**.
+2. Connect your GitHub repository: `Aryash-710/wicinternship`.
+3. Render automatically reads `render.yaml` and deploys the service.
+
+### Option B: Manual Web Service Setup
+1. In your Render Dashboard, click **New +** &rarr; select **Web Service**.
+2. Connect your repository: `Aryash-710/wicinternship`.
+3. Configure settings:
+   - **Environment:** `Python 3` (or `Docker`)
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Instance Type:** `Free`
+4. Add Environment Variables:
+   - `HOST` = `0.0.0.0`
+   - `DEBUG` = `False`
+5. Click **Create Web Service**.
+
+---
+
+## 📞 Twilio Voice Webhook Configuration
+
+To connect your own Twilio number:
+
+1. Log in to the [Twilio Console](https://console.twilio.com/).
+2. Navigate to **Phone Numbers** &rarr; **Manage** &rarr; **Active numbers**.
+3. Under **Voice Configuration &rarr; A CALL COMES IN**:
+   - Set to: **Webhook**
+   - URL: `https://<YOUR-RENDER-APP-OR-NGROK-URL>/api/v1/telecom/ivr/twiml`
+   - Method: **HTTP POST**
+4. Click **Save configuration**.
 
 ---
 
 ## 🐳 Docker Deployment
 
-You can deploy the full **KaayakaSetu** microservices platform in an isolated Docker container.
+To run in an isolated Docker container:
 
-### Option A: Using Docker Compose (Recommended)
+```bash
+# Build and start container
+docker compose up -d --build
 
-1. **Build and launch the platform:**
-   ```bash
-   docker compose up -d --build
-   ```
+# View container logs
+docker compose logs -f
 
-2. **Verify container status and health:**
-   ```bash
-   docker compose ps
-   ```
-
-3. **View live logs:**
-   ```bash
-   docker compose logs -f
-   ```
-
-4. **Stop the platform:**
-   ```bash
-   docker compose down
-   ```
+# Stop container
+docker compose down
+```
 
 ---
 
-## 🧪 Running Automated Tests
+## 🧪 Automated Testing Suite
 
-Run the unit test suite covering all microservices:
+Run the full automated test suite covering all microservices, role authentication, and matching:
+
 ```bash
 pytest app/tests/test_services.py -v
 ```
+
+### Verified Test Cases:
+- `test_health_check` &rarr; System status and microservices UP check.
+- `test_location_service_distance` &rarr; Haversine formula accuracy.
+- `test_fair_wage_prediction` &rarr; City tiers and experience calculations.
+- `test_worker_registration_and_api` &rarr; Worker profile creation and validation.
+- `test_job_posting_and_api` &rarr; Employer job postings.
+- `test_smart_matching_service` &rarr; Multi-factor heuristic scoring.
+- `test_feed_service_endpoints` &rarr; Filtered feeds and aggregations.
+- `test_contact_service_and_sms` &rarr; Inquiry dispatch and SMS simulation.
+- `test_ivr_service_direct_unit_flows` &rarr; DTMF state machine transitions.
+- `test_ivr_voice_bilingual_api_flow` &rarr; TwiML XML and Kannada/Hindi voice scripts.
+- `test_auth_service_and_roles` &rarr; Token generation, password hashing, and role checks.
+- `test_scoped_matching_queries_worker_and_employer` &rarr; Query scoping and zero data leakage.
+
+---
+
+## 📂 Project Structure
+
+```
+bluecollar_platform/
+├── app/
+│   ├── models/
+│   │   └── schemas.py              # Pydantic schemas (Worker, Job, Match, Auth, IVR)
+│   ├── routers/
+│   │   ├── auth.py                 # Authentication router (register, login, me, logout)
+│   │   ├── workers.py              # Worker profiles microservice
+│   │   ├── jobs.py                 # Job requirements microservice
+│   │   ├── matching.py             # Role-scoped smart matching router
+│   │   ├── wage.py                 # Fair wage prediction router
+│   │   ├── telecom.py              # Twilio/Exotel IVR voice call router
+│   │   ├── feeds.py                # Job & worker feed endpoints
+│   │   ├── location.py             # Geodesic distance calculation router
+│   │   └── contact.py              # Inquiries and SMS notification bridge
+│   ├── services/
+│   │   ├── auth_service.py         # Password hashing, token management, session handling
+│   │   ├── ivr_service.py          # Dedicated IVR voice state machine & TwiML generator
+│   │   ├── matching_service.py     # Heuristic multi-factor matching algorithms
+│   │   ├── wage_service.py         # Fair wage prediction engine
+│   │   ├── worker_service.py       # Worker CRUD operations
+│   │   ├── job_service.py          # Job posting CRUD operations
+│   │   └── contact_service.py      # Direct contact inquiry management
+│   ├── static/
+│   │   ├── css/style.css           # Modern CSS responsive styles & phone styling
+│   │   ├── js/app.js               # Frontend controller & role separation logic
+│   │   └── index.html              # Single Page Application (Auth screen & Dashboard)
+│   ├── config.py                   # Global configuration & environment settings
+│   ├── database.py                 # SQLite database initialization & seeding
+│   └── main.py                     # FastAPI application factory & router registration
+├── app/tests/
+│   └── test_services.py            # Comprehensive test suite (12 tests)
+├── Dockerfile                      # Production multi-stage Docker build
+├── docker-compose.yml              # Local container orchestration
+├── render.yaml                     # Render Cloud Deployment Blueprint
+├── requirements.txt                # Python package dependencies
+├── run.py                          # Single-command application launcher
+└── README.md                       # Platform documentation
+```
+
+---
+
+## 📜 License
+This project is open-source and distributed under the [MIT License](LICENSE).
