@@ -11,7 +11,10 @@ from app.services.contact_service import ContactService
 from app.services.ivr_service import IVRService, TelecomService
 from app.models.schemas import WorkerCreate, JobCreate, ContactCreate
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
 def setup_module(module):
@@ -19,7 +22,7 @@ def setup_module(module):
     init_db()
 
 
-def test_health_check():
+def test_health_check(client):
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
@@ -81,7 +84,7 @@ def test_worker_registration_and_api():
         assert data["daily_rate"] == 750.0
 
 
-def test_job_posting_and_api():
+def test_job_posting_and_api(client):
     payload = {
         "title": "Apartment Kitchen Pipe Leak Fix",
         "trade": "Plumber",
@@ -117,7 +120,7 @@ def test_smart_matching_service():
         assert "skill_score" in first["breakdown"]
 
 
-def test_feed_service_endpoints():
+def test_feed_service_endpoints(client):
     res_jobs = client.get("/api/v1/feeds/jobs?city=Bengaluru")
     assert res_jobs.status_code == 200
     jobs = res_jobs.json()
@@ -129,7 +132,7 @@ def test_feed_service_endpoints():
     assert isinstance(workers, list)
 
 
-def test_contact_service_and_sms():
+def test_contact_service_and_sms(client):
     contact = client.post("/api/v1/contact/", json={
         "sender_type": "employer",
         "sender_id": 1,
@@ -181,7 +184,7 @@ def test_ivr_service_direct_unit_flows():
     assert "मजदूरी" in res_wage["prompt_text"]
 
 
-def test_ivr_voice_bilingual_api_flow():
+def test_ivr_voice_bilingual_api_flow(client):
     # Call greeting via API
     res = client.post("/api/v1/telecom/ivr", json={
         "call_sid": "CALL_TEST_101",
@@ -233,7 +236,7 @@ def test_auth_service_and_roles():
     assert retrieved["id"] == w_user["id"]
 
 
-def test_scoped_matching_queries_worker_and_employer():
+def test_scoped_matching_queries_worker_and_employer(client):
     from app.services.auth_service import AuthService
 
     # Worker Token
@@ -268,7 +271,7 @@ def test_scoped_matching_queries_worker_and_employer():
     assert "matches" in m_data
 
 
-def test_private_chat_service_and_isolation():
+def test_private_chat_service_and_isolation(client):
     from app.services.auth_service import AuthService
 
     # 1. User 1 (Ramesh)
@@ -325,4 +328,40 @@ def test_private_chat_service_and_isolation():
     # User 2 requests their conversations list: MUST NOT contain User 3
     convs_u2 = client.get("/api/v1/chat/conversations", headers={"Authorization": f"Bearer {t2}"}).json()
     assert not any(c.get("partner_id") == u3["id"] for c in convs_u2)
+
+
+def test_chat_initiate_and_realtime_broadcast():
+    import asyncio
+    from app.services.chat_service import ChatService, chat_manager
+
+    # Test initiate on job 1
+    info = ChatService.get_or_create_user_for_target("job", 1)
+    assert info is not None
+    assert info["partner_id"] == 3
+    assert "Shree Manjunatha Traders" in info["partner_name"]
+
+    # Test initiate on worker 1
+    winfo = ChatService.get_or_create_user_for_target("worker", 1)
+    assert winfo is not None
+    assert winfo["partner_id"] == 1
+    assert "Ramesh Gowda" in winfo["partner_name"]
+
+    # Test WebSocket connection manager
+    received = []
+    class DummyWS:
+        async def accept(self): pass
+        async def send_json(self, data): received.append(data)
+
+    dummy = DummyWS()
+    async def async_test():
+        await chat_manager.connect(999, dummy)
+        assert chat_manager.is_user_online(999)
+        sent = await chat_manager.send_to_user(999, {"type": "ping"})
+        assert sent is True
+        assert len(received) == 1
+        chat_manager.disconnect(999, dummy)
+        assert not chat_manager.is_user_online(999)
+
+    asyncio.run(async_test())
+
 

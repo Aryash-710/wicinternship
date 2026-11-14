@@ -1,12 +1,65 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
+from starlette.websockets import WebSocket
 from app.database import get_db
 from app.services.worker_service import WorkerService
 from app.services.job_service import JobService
 from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
+
+
+class ConnectionManager:
+    """
+    Manages active WebSocket connections for real-time 1-to-1 messaging.
+    Maps authenticated user_id -> Set of active WebSockets.
+    """
+    def __init__(self):
+        self.active_connections: Dict[int, Set[WebSocket]] = {}
+
+    async def connect(self, user_id: int, websocket: WebSocket):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = set()
+        self.active_connections[user_id].add(websocket)
+        logger.info(f"🟢 [WebSocket] User {user_id} connected. Active user connections: {len(self.active_connections[user_id])}")
+
+    def disconnect(self, user_id: int, websocket: WebSocket):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        logger.info(f"🔴 [WebSocket] User {user_id} disconnected.")
+
+    async def send_to_user(self, user_id: int, payload: dict) -> bool:
+        """
+        Sends payload in real-time to all open sockets of user_id.
+        Returns True if delivered to at least one active connection.
+        """
+        if user_id not in self.active_connections:
+            return False
+
+        dead_sockets = set()
+        delivered = False
+        for ws in list(self.active_connections[user_id]):
+            try:
+                await ws.send_json(payload)
+                delivered = True
+            except Exception as e:
+                logger.warning(f"Failed to send real-time payload to user {user_id}: {e}")
+                dead_sockets.add(ws)
+
+        for ws in dead_sockets:
+            self.active_connections[user_id].discard(ws)
+
+        return delivered
+
+    def is_user_online(self, user_id: int) -> bool:
+        return user_id in self.active_connections and len(self.active_connections[user_id]) > 0
+
+
+chat_manager = ConnectionManager()
 
 
 class ChatService:
@@ -99,9 +152,13 @@ class ChatService:
 
                 conversations.append({
                     "other_user_id": partner["id"],
+                    "partner_id": partner["id"],
                     "other_user_name": partner["full_name"],
+                    "partner_name": partner["full_name"],
                     "other_user_role": partner["role"],
+                    "partner_role": partner["role"],
                     "other_user_phone": partner["phone"],
+                    "partner_phone": partner["phone"],
                     "other_user_trade": partner["trade"],
                     "other_user_company": partner["company_name"],
                     "last_message": last_msg["message_text"] if last_msg else "",
@@ -155,6 +212,18 @@ class ChatService:
             return messages
 
     @staticmethod
+    def mark_thread_read(user_id: int, other_user_id: int):
+        """Marks all incoming messages from other_user_id as read."""
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE messages 
+                SET is_read = 1 
+                WHERE sender_id = ? AND receiver_id = ? AND is_read = 0
+            """, (other_user_id, user_id))
+            conn.commit()
+
+    @staticmethod
     def get_or_create_user_for_target(target_type: str, target_id: int) -> Optional[Dict[str, Any]]:
         """
         Resolves or creates a user account for a Worker or Job Employer so that
@@ -174,7 +243,6 @@ class ChatService:
                     # Create employer user account
                     emp_name = job["employer_name"]
                     uname = "emp_" + phone[-6:]
-                    from app.services.auth_service import AuthService
                     user = AuthService.register_user(
                         username=uname,
                         phone=phone,
@@ -187,6 +255,10 @@ class ChatService:
                 else:
                     user = AuthService._format_user_dict(user)
                 return {
+                    "partner_id": user["id"],
+                    "partner_name": user["full_name"],
+                    "partner_role": user["role"],
+                    "partner_phone": user["phone"],
                     "other_user": user,
                     "job_id": job["id"],
                     "job_title": job["title"],
@@ -204,7 +276,6 @@ class ChatService:
                     # Create worker user account
                     w_name = worker["name"]
                     uname = "wkr_" + phone[-6:]
-                    from app.services.auth_service import AuthService
                     user = AuthService.register_user(
                         username=uname,
                         phone=phone,
@@ -219,6 +290,10 @@ class ChatService:
                 else:
                     user = AuthService._format_user_dict(user)
                 return {
+                    "partner_id": user["id"],
+                    "partner_name": user["full_name"],
+                    "partner_role": user["role"],
+                    "partner_phone": user["phone"],
                     "other_user": user,
                     "job_id": None,
                     "job_title": None,

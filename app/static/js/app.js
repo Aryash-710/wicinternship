@@ -240,6 +240,7 @@ function openMainDashboard() {
   loadInsights();
   populateMatchingDropdowns();
   loadConversations();
+  initChatWebSocket();
 }
 
 function showAuthTab(tab) {
@@ -383,6 +384,10 @@ async function handleRegister(e, role) {
 }
 
 function handleLogout() {
+  if (chatSocket) {
+    try { chatSocket.close(); } catch (e) {}
+    chatSocket = null;
+  }
   if (authToken) {
     fetch("/api/v1/auth/logout", {
       method: "POST",
@@ -1104,7 +1109,7 @@ function speakCurrentPrompt() {
 }
 
 // ============================================================================
-// 1-to-1 Private Chat & Messaging Microservice Controller
+// Real-Time 1-to-1 Private Chat Microservice (WebSocket + HTTP Fallback)
 // ============================================================================
 let activeChatPartnerId = null;
 let activeChatJobId = null;
@@ -1113,6 +1118,147 @@ let activeChatPartnerRole = "";
 let activeChatPartnerPhone = "";
 let activeChatJobTitle = "";
 let chatPollTimer = null;
+let chatSocket = null;
+let chatReconnectTimer = null;
+let typingIndicatorTimer = null;
+let lastTypingSentAt = 0;
+
+// Initialize Bidirectional WebSocket
+function initChatWebSocket() {
+  const token = authToken || localStorage.getItem("kaayaka_auth_token");
+  if (!token) return;
+
+  if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${proto}//${window.location.host}/api/v1/chat/ws?token=${token}`;
+
+  try {
+    chatSocket = new WebSocket(wsUrl);
+
+    chatSocket.onopen = () => {
+      console.log("🟢 Real-Time Chat WebSocket connected.");
+      updateWsStatusBadge(true);
+      if (chatReconnectTimer) {
+        clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = null;
+      }
+      loadConversations();
+    };
+
+    chatSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleRealTimeWsEvent(data);
+      } catch (err) {
+        console.error("Error parsing WebSocket message:", err);
+      }
+    };
+
+    chatSocket.onclose = () => {
+      console.warn("🔴 Chat WebSocket closed. Retrying in 2.5s...");
+      updateWsStatusBadge(false);
+      chatSocket = null;
+      if (!chatReconnectTimer && (authToken || localStorage.getItem("kaayaka_auth_token"))) {
+        chatReconnectTimer = setTimeout(initChatWebSocket, 2500);
+      }
+    };
+
+    chatSocket.onerror = (err) => {
+      console.error("Chat WebSocket error:", err);
+      updateWsStatusBadge(false);
+    };
+  } catch (e) {
+    console.warn("WebSocket initialization fallback:", e);
+    updateWsStatusBadge(false);
+  }
+}
+
+function updateWsStatusBadge(isConnected) {
+  const badge = document.getElementById("ws-status-badge");
+  if (!badge) return;
+  if (isConnected) {
+    badge.innerHTML = `<span style="display:inline-block; width:7px; height:7px; background:#22c55e; border-radius:50%;"></span> Real-Time Active`;
+    badge.style.background = "#dcfce7";
+    badge.style.color = "#15803d";
+  } else {
+    badge.innerHTML = `<span style="display:inline-block; width:7px; height:7px; background:#f59e0b; border-radius:50%;"></span> Connecting...`;
+    badge.style.background = "#fef3c7";
+    badge.style.color = "#b45309";
+  }
+}
+
+function handleRealTimeWsEvent(data) {
+  if (data.type === "new_message") {
+    const msg = data.message;
+    // If user is currently looking at this sender's thread:
+    if (activeChatPartnerId && String(activeChatPartnerId) === String(msg.sender_id)) {
+      appendChatMessage(msg);
+      playChatChime();
+      // Mark read via WebSocket
+      if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({ type: "mark_read", partner_id: activeChatPartnerId }));
+      }
+    } else {
+      // In another tab or chat: chime and highlight unread badge
+      playChatChime();
+    }
+    // Always refresh conversations list so latest preview and badge update
+    loadConversations();
+  } else if (data.type === "message_sent") {
+    // Confirmation from server for sent message
+    loadConversations();
+  } else if (data.type === "typing") {
+    if (activeChatPartnerId && String(activeChatPartnerId) === String(data.sender_id)) {
+      showTypingIndicator(data.sender_name);
+    }
+  } else if (data.type === "messages_read") {
+    if (activeChatPartnerId && String(activeChatPartnerId) === String(data.reader_id)) {
+      // Update checkmarks to read
+      document.querySelectorAll(".chat-bubble.mine .bubble-meta").forEach(el => {
+        if (!el.innerText.includes("Read")) {
+          el.innerText = el.innerText.replace("✓ Sent", "✓✓ Read");
+        }
+      });
+    }
+  }
+}
+
+function showTypingIndicator(name) {
+  const indicator = document.getElementById("chat-typing-indicator");
+  const userSpan = document.getElementById("chat-typing-user");
+  if (!indicator) return;
+  if (userSpan) userSpan.innerText = name || "Partner";
+  indicator.style.display = "block";
+
+  if (typingIndicatorTimer) clearTimeout(typingIndicatorTimer);
+  typingIndicatorTimer = setTimeout(() => {
+    indicator.style.display = "none";
+  }, 2800);
+}
+
+function playChatChime() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 tone
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08); // A5 tone
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (e) {
+    // Ignore audio permission or blocked context
+  }
+}
 
 async function loadConversations() {
   const token = authToken || localStorage.getItem("kaayaka_auth_token");
@@ -1158,26 +1304,31 @@ async function loadConversations() {
 
     listEl.innerHTML = "";
     conversations.forEach(c => {
+      const partnerId = c.partner_id || c.other_user_id;
+      const partnerName = c.partner_name || c.other_user_name || "User";
+      const partnerRole = c.partner_role || c.other_user_role || "user";
+      const partnerPhone = c.partner_phone || c.other_user_phone || "";
+
       const item = document.createElement("div");
-      item.className = `conversation-item ${activeChatPartnerId === c.partner_id ? 'active' : ''}`;
+      item.className = `conversation-item ${String(activeChatPartnerId) === String(partnerId) ? 'active' : ''}`;
       
-      const roleBadgeClass = c.partner_role === "worker" ? "badge-trade" : "badge-score";
+      const roleBadgeClass = partnerRole === "worker" ? "badge-trade" : "badge-score";
       const unreadBadge = c.unread_count > 0 
         ? `<span class="badge" style="background:#ef4444; color:white; font-size:0.7rem; border-radius:999px; padding:2px 7px;">${c.unread_count} new</span>` 
         : "";
 
-      item.onclick = () => openChatThread(c.partner_id, c.partner_name, c.partner_role, c.partner_phone, c.job_title, c.job_id);
+      item.onclick = () => openChatThread(partnerId, partnerName, partnerRole, partnerPhone, c.job_title, c.job_id);
       
       item.innerHTML = `
-        <div class="conv-avatar">${(c.partner_name || "U").charAt(0).toUpperCase()}</div>
+        <div class="conv-avatar">${partnerName.charAt(0).toUpperCase()}</div>
         <div class="conv-info">
           <div class="conv-top">
-            <span class="conv-name">${escapeHtml(c.partner_name || "User")}</span>
+            <span class="conv-name">${escapeHtml(partnerName)}</span>
             <span class="conv-time">${formatChatTime(c.last_message_at)}</span>
           </div>
           <div class="conv-preview">${escapeHtml(c.last_message || "")}</div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
-            <span class="badge ${roleBadgeClass}" style="font-size:0.68rem; padding:1px 6px;">${c.partner_role === 'worker' ? '👷 Worker' : '🏢 Employer'}</span>
+            <span class="badge ${roleBadgeClass}" style="font-size:0.68rem; padding:1px 6px;">${partnerRole === 'worker' ? '👷 Worker' : '🏢 Employer'}</span>
             ${unreadBadge}
           </div>
         </div>
@@ -1224,20 +1375,43 @@ function openChatThread(partnerId, partnerName, partnerRole, partnerPhone, jobTi
   const placeholder = document.getElementById("chat-placeholder");
   if (placeholder) placeholder.style.display = "none";
 
+  // Hide typing indicator
+  const indicator = document.getElementById("chat-typing-indicator");
+  if (indicator) indicator.style.display = "none";
+
   fetchAndRenderMessages();
 
-  // Focus input
+  // Focus input and attach typing listener
   const input = document.getElementById("chat-input-text");
-  if (input) input.focus();
+  if (input) {
+    input.focus();
+    input.oninput = handleChatInputTyping;
+  }
 
-  // Periodic polling for thread updates
+  // Notify server that messages are read via WebSocket
+  if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+    chatSocket.send(JSON.stringify({ type: "mark_read", partner_id: activeChatPartnerId }));
+  }
+
+  // Backup fallback polling every 6 seconds in case socket disconnected
   if (chatPollTimer) clearInterval(chatPollTimer);
   chatPollTimer = setInterval(() => {
     const chatTab = document.getElementById("tab-chat");
     if (chatTab && chatTab.classList.contains("active") && activeChatPartnerId) {
-      fetchAndRenderMessages(true);
+      if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+        fetchAndRenderMessages(true);
+      }
     }
-  }, 3500);
+  }, 6000);
+}
+
+function handleChatInputTyping() {
+  if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN || !activeChatPartnerId) return;
+  const now = Date.now();
+  if (now - lastTypingSentAt > 1800) {
+    lastTypingSentAt = now;
+    chatSocket.send(JSON.stringify({ type: "typing", receiver_id: activeChatPartnerId }));
+  }
 }
 
 async function fetchAndRenderMessages(isBackground = false) {
@@ -1262,25 +1436,14 @@ async function fetchAndRenderMessages(isBackground = false) {
       container.innerHTML = `
         <div style="text-align:center; color:var(--text-muted); padding:3rem 1rem; font-size:0.9rem;">
           👋 No messages yet with <strong>${escapeHtml(activeChatPartnerName)}</strong>.<br>
-          <span style="font-size:0.8rem; opacity:0.8;">Say hello or discuss work details! Only the two of you can view this thread.</span>
+          <span style="font-size:0.8rem; opacity:0.8;">Say hello! Messages are delivered in real time with end-to-end privacy.</span>
         </div>
       `;
       return;
     }
 
     messages.forEach(msg => {
-      const bubble = document.createElement("div");
-      bubble.className = `chat-bubble ${msg.is_mine ? 'mine' : 'theirs'}`;
-      
-      const timeStr = formatChatTime(msg.created_at);
-      const readIndicator = msg.is_mine ? (msg.is_read ? ' • ✓✓ Read' : ' • ✓ Sent') : '';
-
-      bubble.innerHTML = `
-        <div class="bubble-sender">${msg.is_mine ? 'You' : escapeHtml(msg.sender_name || activeChatPartnerName)}</div>
-        <div class="bubble-text">${escapeHtml(msg.message_text)}</div>
-        <div class="bubble-meta">${timeStr}${readIndicator}</div>
-      `;
-      container.appendChild(bubble);
+      appendChatMessage(msg, false);
     });
 
     if (!isBackground || isNearBottom) {
@@ -1295,6 +1458,34 @@ async function fetchAndRenderMessages(isBackground = false) {
   }
 }
 
+function appendChatMessage(msg, autoScroll = true) {
+  const container = document.getElementById("chat-messages-container");
+  if (!container) return;
+
+  // Clear "no messages yet" if present
+  if (container.innerText.includes("No messages yet with")) {
+    container.innerHTML = "";
+  }
+
+  const isMine = msg.is_mine || (currentUser && String(msg.sender_id) === String(currentUser.id));
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble ${isMine ? 'mine' : 'theirs'}`;
+  
+  const timeStr = formatChatTime(msg.created_at || new Date().toISOString());
+  const readIndicator = isMine ? (msg.is_read ? ' • ✓✓ Read' : ' • ✓ Sent') : '';
+
+  bubble.innerHTML = `
+    <div class="bubble-sender">${isMine ? 'You' : escapeHtml(msg.sender_name || activeChatPartnerName)}</div>
+    <div class="bubble-text">${escapeHtml(msg.message_text)}</div>
+    <div class="bubble-meta">${timeStr}${readIndicator}</div>
+  `;
+  container.appendChild(bubble);
+
+  if (autoScroll) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
 async function handleSendChatMessage(e) {
   e.preventDefault();
   const token = authToken || localStorage.getItem("kaayaka_auth_token");
@@ -1306,6 +1497,29 @@ async function handleSendChatMessage(e) {
 
   input.value = "";
 
+  // 1. If WebSocket is connected, send instantly over WebSocket (0ms roundtrip)
+  if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+    chatSocket.send(JSON.stringify({
+      type: "chat_message",
+      receiver_id: activeChatPartnerId,
+      message_text: text,
+      job_id: activeChatJobId || null
+    }));
+
+    // Optimistically render bubble immediately for instant UI response
+    appendChatMessage({
+      sender_id: currentUser ? currentUser.id : null,
+      message_text: text,
+      is_mine: true,
+      is_read: false,
+      created_at: new Date().toISOString()
+    }, true);
+
+    loadConversations();
+    return;
+  }
+
+  // 2. HTTP Fallback if WebSocket is not open
   try {
     const res = await fetch("/api/v1/chat/send", {
       method: "POST",
@@ -1326,7 +1540,8 @@ async function handleSendChatMessage(e) {
       return;
     }
 
-    await fetchAndRenderMessages();
+    const msg = await res.json();
+    appendChatMessage(msg, true);
     await loadConversations();
   } catch (err) {
     console.error("Error sending message:", err);
@@ -1360,6 +1575,10 @@ async function initiateChat(targetType, targetId, titleOrName) {
     }
 
     const data = await res.json();
+    const partnerId = data.partner_id || (data.other_user && data.other_user.id);
+    const partnerName = data.partner_name || (data.other_user && data.other_user.full_name) || titleOrName;
+    const partnerRole = data.partner_role || (data.other_user && data.other_user.role) || (targetType === 'job' ? 'employer' : 'worker');
+    const partnerPhone = data.partner_phone || (data.other_user && data.other_user.phone) || '';
 
     // Switch to Chat Tab
     switchTab("tab-chat", document.getElementById("nav-btn-chat"));
@@ -1367,10 +1586,10 @@ async function initiateChat(targetType, targetId, titleOrName) {
     // Load conversations list and select this conversation
     await loadConversations();
     openChatThread(
-      data.partner_id,
-      data.partner_name,
-      data.partner_role,
-      data.partner_phone,
+      partnerId,
+      partnerName,
+      partnerRole,
+      partnerPhone,
       data.job_title,
       data.job_id
     );

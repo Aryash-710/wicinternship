@@ -695,9 +695,15 @@ Press 📞 CALL or dial from any real mobile phone!
               End-to-end isolated messages. Only you and the person you are chatting with can see this thread.
             </p>
           </div>
-          <button class="btn btn-secondary" onclick="loadConversations()" style="font-size:0.85rem; padding:0.4rem 0.8rem;">
-            🔄 Refresh Chats
-          </button>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span id="ws-status-badge" class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; display:inline-flex; align-items:center; gap:4px;">
+              <span style="display:inline-block; width:7px; height:7px; background:#22c55e; border-radius:50%;"></span>
+              Real-Time Active
+            </span>
+            <button class="btn btn-secondary" onclick="loadConversations()" style="font-size:0.85rem; padding:0.4rem 0.8rem;">
+              🔄 Refresh Chats
+            </button>
+          </div>
         </div>
 
         <div class="chat-layout">
@@ -723,10 +729,16 @@ Press 📞 CALL or dial from any real mobile phone!
                 <div style="display:flex; align-items:center; gap:0.5rem;">
                   <strong id="chat-partner-name" style="font-size:1rem; color:var(--text-main);">...</strong>
                   <span id="chat-partner-role-badge" class="badge" style="font-size:0.72rem;">...</span>
+                  <span id="chat-partner-online-dot" style="display:inline-block; width:8px; height:8px; background:#22c55e; border-radius:50%;" title="Online now"></span>
                 </div>
                 <div id="chat-job-context" style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;"></div>
               </div>
               <div style="font-size:0.82rem; color:#0369a1; font-weight:600;" id="chat-partner-phone"></div>
+            </div>
+
+            <!-- Typing indicator -->
+            <div id="chat-typing-indicator" style="display:none; font-size:0.78rem; color:#0284c7; padding:4px 1.25rem; font-style:italic; background:#f0f9ff; border-bottom:1px solid #e0f2fe;">
+              ✍️ <span id="chat-typing-user">Partner</span> is typing...
             </div>
 
             <!-- Messages Scroll Area -->

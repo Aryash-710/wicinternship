@@ -263,9 +263,13 @@ class MessageItem(BaseModel):
 
 class ConversationItem(BaseModel):
     other_user_id: int
+    partner_id: int
     other_user_name: str
+    partner_name: str
     other_user_role: str
+    partner_role: str
     other_user_phone: str
+    partner_phone: str
     other_user_trade: Optional[str] = None
     other_user_company: Optional[str] = None
     last_message: str
@@ -278,4 +282,15 @@ class ConversationItem(BaseModel):
 class ChatInitiateRequest(BaseModel):
     target_type: str  # 'job' or 'worker'
     target_id: int
+
+
+class ChatInitiateResponse(BaseModel):
+    partner_id: int
+    partner_name: str
+    partner_role: str
+    partner_phone: str
+    job_id: Optional[int] = None
+    job_title: Optional[str] = None
+    trade: Optional[str] = None
+    other_user: Optional[Dict[str, Any]] = None
 

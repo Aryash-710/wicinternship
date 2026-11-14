@@ -737,23 +737,56 @@ main.content-area {
 }
 
 .chat-bubble.mine {
+  align-self: flex-end;
   background: #1e3a8a;
   color: white;
   border-bottom-right-radius: 2px;
 }
 
 .chat-bubble.theirs {
+  align-self: flex-start;
   background: white;
   color: #1e293b;
   border: 1px solid var(--border-color);
   border-bottom-left-radius: 2px;
 }
 
-.chat-bubble-meta {
-  font-size: 0.7rem;
-  margin-top: 0.25rem;
-  opacity: 0.75;
+.chat-bubble .bubble-sender {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  opacity: 0.85;
+}
+
+.chat-bubble.mine .bubble-sender {
+  color: #93c5fd;
   text-align: right;
+}
+
+.chat-bubble.theirs .bubble-sender {
+  color: #0369a1;
+  text-align: left;
+}
+
+.chat-bubble .bubble-text {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-bubble .bubble-meta {
+  font-size: 0.7rem;
+  margin-top: 4px;
+  opacity: 0.8;
+  text-align: right;
+}
+
+.chat-bubble.mine .bubble-meta {
+  color: #cbd5e1;
+}
+
+.chat-bubble.theirs .bubble-meta {
+  color: #64748b;
 }
 
 .chat-input-bar {
