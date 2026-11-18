@@ -136,7 +136,7 @@ class AuthService:
 
     @classmethod
     def get_user_by_token(cls, token: str) -> Optional[Dict[str, Any]]:
-        if not token:
+        if not token or not isinstance(token, str):
             return None
         token = token.replace("Bearer ", "").strip()
         with get_db() as conn:
@@ -153,7 +153,7 @@ class AuthService:
 
     @classmethod
     def logout(cls, token: str) -> bool:
-        if not token:
+        if not token or not isinstance(token, str):
             return False
         token = token.replace("Bearer ", "").strip()
         with get_db() as conn:

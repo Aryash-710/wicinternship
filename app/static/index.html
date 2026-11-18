@@ -289,6 +289,24 @@
     <!-- Main Content Area -->
     <main class="content-area">
 
+      <!-- Worker Live Availability Banner (Only shown when logged in as Worker) -->
+      <div id="worker-availability-banner" style="display:none; background:#ffffff; border:2px solid #22c55e; border-radius:12px; padding:1.2rem 1.5rem; margin-bottom:1.5rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <div style="font-size:0.75rem; font-weight:800; color:#15803d; text-transform:uppercase; letter-spacing:0.06em;">
+            👷 Worker Availability Control (ನಿಮ್ಮ ಕೆಲಸದ ಲಭ್ಯತೆ / आपकी उपलब्धता स्थिति)
+          </div>
+          <div id="worker-banner-status-text" style="font-size:1.15rem; font-weight:800; margin-top:0.3rem;">
+            Loading your status...
+          </div>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">
+            Only you can mark yourself Busy in Work or Available. Employers cannot alter your availability.
+          </div>
+        </div>
+        <div id="worker-banner-actions" style="display:flex; gap:0.6rem; align-items:center;">
+          <!-- Action button rendered dynamically -->
+        </div>
+      </div>
+
       <!-- 1. JOB FEED TAB (Worker Profile Only) -->
       <div id="tab-jobs" class="tab-pane active">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
@@ -863,6 +881,6 @@ Twilio: +1 (737) 250-8034
     </div>
   </div>
 
-  <script src="/static/js/app.js?v=2.1"></script>
+  <script src="/static/js/app.js?v=2.2"></script>
 </body>
 </html>

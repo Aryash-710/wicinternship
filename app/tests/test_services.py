@@ -13,8 +13,8 @@ from app.models.schemas import WorkerCreate, JobCreate, ContactCreate
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
-        yield c
+    c = TestClient(app)
+    yield c
 
 
 def setup_module(module):
@@ -672,6 +672,126 @@ def test_ivr_web_simulator_pure_hindi_flow():
     assert res1.language == "hindi"
     assert "श्रमिक पंजीकरण में आपका स्वागत है" in res1.prompt_text
     assert "ಕನ್ನಡ" not in res1.prompt_text
+
+
+def test_worker_status_and_job_deletion_ownership_permissions():
+    from app.database import get_db
+    from app.models.schemas import WorkerCreate, JobCreate
+    from app.services.worker_service import WorkerService
+    from app.services.job_service import JobService
+    from app.services.auth_service import AuthService
+    from app.routers.workers import set_worker_status
+    from app.routers.jobs import delete_job, hire_worker_for_job
+    from fastapi import HTTPException
+    import pytest
+
+    worker_phone = "9845011223"
+    other_worker_phone = "9845011224"
+    emp1_phone = "9845011225"
+    emp2_phone = "9845011226"
+
+    with get_db() as conn:
+        for p in [worker_phone, other_worker_phone, emp1_phone, emp2_phone]:
+            conn.execute("DELETE FROM workers WHERE phone = ?", (p,))
+            conn.execute("DELETE FROM users WHERE phone = ?", (p,))
+
+    # 1. Register worker 1
+    w1_user = AuthService.register_user(
+        username="perm_worker_1",
+        phone=worker_phone,
+        password="password123",
+        role="worker",
+        full_name="Vijay Worker",
+        trade="Electrician"
+    )
+    t_worker1 = AuthService.create_session(w1_user["id"])
+    w1_id = w1_user["worker_id"]
+
+    # Register worker 2
+    w2_user = AuthService.register_user(
+        username="perm_worker_2",
+        phone=other_worker_phone,
+        password="password123",
+        role="worker",
+        full_name="Manoj Worker",
+        trade="Plumber"
+    )
+    t_worker2 = AuthService.create_session(w2_user["id"])
+    w2_id = w2_user["worker_id"]
+
+    # 2. Register employer 1 and employer 2
+    e1_user = AuthService.register_user(
+        username="perm_emp_1",
+        phone=emp1_phone,
+        password="password123",
+        role="employer",
+        full_name="Ravi Builder",
+        company_name="Ravi Constructions"
+    )
+    t_emp1 = AuthService.create_session(e1_user["id"])
+
+    e2_user = AuthService.register_user(
+        username="perm_emp_2",
+        phone=emp2_phone,
+        password="password123",
+        role="employer",
+        full_name="Suresh Contractor",
+        company_name="Suresh Enterprises"
+    )
+    t_emp2 = AuthService.create_session(e2_user["id"])
+
+    # Create job posted by employer 1
+    job1 = JobService.create_job(JobCreate(
+        title="Site Electrical Wiring",
+        trade="Electrician",
+        employer_name="Ravi Constructions",
+        employer_phone=emp1_phone,
+        city="Bengaluru",
+        wage_offered=950.0
+    ))
+    job1_id = job1["id"]
+
+    # -----------------------------------------------------------------
+    # WORKER AVAILABILITY PERMISSION TESTS
+    # -----------------------------------------------------------------
+    # A) Employer attempts to manually change worker's status -> MUST BE REJECTED 403
+    with pytest.raises(HTTPException) as exc_info:
+        set_worker_status(worker_id=w1_id, availability="busy", authorization=f"Bearer {t_emp1}")
+    assert exc_info.value.status_code == 403
+    assert "Employers cannot manually change worker availability status" in exc_info.value.detail
+
+    # B) Worker 2 attempts to change Worker 1's status -> MUST BE REJECTED 403
+    with pytest.raises(HTTPException) as exc_info:
+        set_worker_status(worker_id=w1_id, availability="busy", authorization=f"Bearer {t_worker2}")
+    assert exc_info.value.status_code == 403
+    assert "Workers can only update their own availability status" in exc_info.value.detail
+
+    # C) Worker 1 updates their OWN status -> MUST SUCCEED 200 OK
+    res_w1 = set_worker_status(worker_id=w1_id, availability="busy", authorization=f"Bearer {t_worker1}")
+    assert res_w1["availability"] == "busy"
+    res_w1_avail = set_worker_status(worker_id=w1_id, availability="available", authorization=f"Bearer {t_worker1}")
+    assert res_w1_avail["availability"] == "available"
+
+    # -----------------------------------------------------------------
+    # JOB DELETION PERMISSION TESTS
+    # -----------------------------------------------------------------
+    # A) Worker attempts to delete a job posting -> MUST BE REJECTED 403
+    with pytest.raises(HTTPException) as exc_info:
+        delete_job(job_id=job1_id, authorization=f"Bearer {t_worker1}")
+    assert exc_info.value.status_code == 403
+    assert "Workers are not authorized to remove job postings" in exc_info.value.detail
+
+    # B) Employer 2 attempts to delete Employer 1's job -> MUST BE REJECTED 403
+    with pytest.raises(HTTPException) as exc_info:
+        delete_job(job_id=job1_id, authorization=f"Bearer {t_emp2}")
+    assert exc_info.value.status_code == 403
+    assert "Employers can only remove their own job postings" in exc_info.value.detail
+
+    # C) Employer 1 deletes their OWN job -> MUST SUCCEED 200 OK
+    del_res = delete_job(job_id=job1_id, authorization=f"Bearer {t_emp1}")
+    assert del_res["status"] == "success"
+    assert JobService.get_job(job1_id) is None
+
 
 
 

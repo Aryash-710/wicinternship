@@ -185,11 +185,17 @@ function openMainDashboard() {
   // Common Messages Tab is visible to both Worker and Employer
   if (navBtnChat) navBtnChat.style.display = "inline-flex";
 
+  const workerBanner = document.getElementById("worker-availability-banner");
+
   if (isWorker) {
     // -----------------------------------------------------------------
     // WORKER PROFILE:
     // MUST NOT SEE: Workers Feed, Post Work Service
     // -----------------------------------------------------------------
+    if (workerBanner) {
+      workerBanner.style.display = "flex";
+      loadWorkerAvailabilityBanner();
+    }
     if (navBtnWorkers) navBtnWorkers.style.display = "none";
     if (tabWorkers) tabWorkers.style.display = "none";
     if (navBtnPostJob) navBtnPostJob.style.display = "none";
@@ -222,6 +228,9 @@ function openMainDashboard() {
     // MUST SEE: Workers Feed, Work Postings (to manage & remove jobs), Post Work, Smart Matcher, Fair Wage
     // MUST NOT SEE: Worker Registration, IVR Service
     // -----------------------------------------------------------------
+    if (workerBanner) {
+      workerBanner.style.display = "none";
+    }
     if (navBtnJobs) {
       navBtnJobs.style.display = "inline-flex";
       navBtnJobs.innerText = "💼 Work Postings (ಕೆಲಸಗಳು)";
@@ -514,11 +523,20 @@ async function loadJobFeed() {
     jobs.forEach(job => {
       const card = document.createElement("div");
       card.className = "card";
+
+      // Only the employer who posted this job can remove it. Workers and other employers cannot.
+      const isOwnerEmployer = currentUser && currentUser.role === 'employer' && (
+        (currentUser.phone && currentUser.phone === job.employer_phone) ||
+        (currentUser.company_name && currentUser.company_name.trim().toLowerCase() === (job.employer_name || '').trim().toLowerCase()) ||
+        (currentUser.full_name && currentUser.full_name.trim().toLowerCase() === (job.employer_name || '').trim().toLowerCase())
+      );
+
       card.innerHTML = `
         <div>
           <div class="card-header">
             <span class="badge badge-trade">${job.trade}</span>
             ${job.urgency === 'urgent' ? '<span class="badge badge-urgent">⚡ Urgent / ತುರ್ತು</span>' : ''}
+            ${isOwnerEmployer ? '<span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:700;">🏢 Your Work Posting</span>' : ''}
           </div>
           <h3 class="card-title">${job.title}</h3>
           <p style="font-size:0.9rem; color:var(--text-muted); margin:0.4rem 0;">${job.description || 'No description provided.'}</p>
@@ -533,9 +551,11 @@ async function loadJobFeed() {
           <button class="btn btn-primary" onclick="initiateChat('job', ${job.id}, '${job.title.replace(/'/g, "\\'")}')">
             💬 Message Employer
           </button>
-          <button class="btn btn-outline" style="color:#dc2626; border-color:#dc2626;" title="Remove this work vacancy after hiring" onclick="removeJobPosting(${job.id}, '${job.title.replace(/'/g, "\\'")}')">
-            🗑️ Remove Work (ಕೆಲಸ ತೆಗೆದುಹಾಕಿ)
-          </button>
+          ${isOwnerEmployer ? `
+            <button class="btn btn-outline" style="color:#dc2626; border-color:#dc2626; font-weight:700;" title="Remove this work vacancy after hiring" onclick="removeJobPosting(${job.id}, '${job.title.replace(/'/g, "\\'")}')">
+              🗑️ Remove Work (ಕೆಲಸ ತೆಗೆದುಹಾಕಿ)
+            </button>
+          ` : ''}
         </div>
       `;
       grid.appendChild(card);
@@ -596,11 +616,8 @@ async function loadWorkerFeed() {
           <button class="btn btn-primary" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
             💬 Message Worker
           </button>
-          <button class="btn btn-success" style="background:#16a34a; border-color:#16a34a; color:white;" onclick="openHireModal(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.trade.replace(/'/g, "\\'")}')">
+          <button class="btn btn-success" style="background:#16a34a; border-color:#16a34a; color:white; font-weight:700;" onclick="openHireModal(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.trade.replace(/'/g, "\\'")}')">
             💼 Hire Worker (ಕೆಲಸಕ್ಕೆ ನೇಮಿಸಿ)
-          </button>
-          <button class="btn btn-outline" style="font-size:0.8rem; padding:0.35rem 0.6rem;" onclick="toggleWorkerStatus(${w.id}, '${isBusy ? 'available' : 'busy'}')">
-            ${isBusy ? '🟢 Mark Available' : '🔴 Mark Busy'}
           </button>
         </div>
       `;
@@ -2056,7 +2073,106 @@ function escapeHtml(text) {
 }
 
 // ============================================================================
-// Worker Hiring & Work Removal Management
+// Worker Availability Management (Worker Profile Only)
+// ============================================================================
+async function loadWorkerAvailabilityBanner() {
+  if (!currentUser || currentUser.role !== "worker") {
+    const banner = document.getElementById("worker-availability-banner");
+    if (banner) banner.style.display = "none";
+    return;
+  }
+
+  const statusText = document.getElementById("worker-banner-status-text");
+  const actionsContainer = document.getElementById("worker-banner-actions");
+  const banner = document.getElementById("worker-availability-banner");
+  if (!statusText || !actionsContainer) return;
+
+  try {
+    let workerData = null;
+    if (currentUser.worker_id) {
+      const res = await fetch(`/api/v1/workers/${currentUser.worker_id}`);
+      if (res.ok) workerData = await res.json();
+    }
+    if (!workerData && currentUser.phone) {
+      const res = await fetch(`/api/v1/workers/?limit=100`);
+      if (res.ok) {
+        const workers = await res.json();
+        workerData = (workers || []).find(w => w.phone === currentUser.phone);
+      }
+    }
+
+    const currentAvailability = (workerData && workerData.availability) ? workerData.availability : "available";
+    const isBusy = (currentAvailability === "busy");
+
+    if (banner) {
+      banner.style.display = "flex";
+      banner.style.borderColor = isBusy ? "#ef4444" : "#22c55e";
+      banner.style.background = isBusy ? "#fef2f2" : "#f0fdf4";
+    }
+
+    if (isBusy) {
+      statusText.innerHTML = `
+        <span style="color:#b91c1c; font-weight:800;">🔴 Currently Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ / काम में व्यस्त)</span>
+      `;
+      actionsContainer.innerHTML = `
+        <button class="btn btn-outline" style="background:#ffffff; color:#15803d; border:2px solid #22c55e; font-weight:800; font-size:0.92rem; padding:0.6rem 1.15rem; cursor:pointer;" onclick="toggleCurrentWorkerAvailability('available')">
+          🟢 Switch to Available (ಕೆಲಸಕ್ಕೆ ಲಭ್ಯವಾಗು)
+        </button>
+      `;
+    } else {
+      statusText.innerHTML = `
+        <span style="color:#15803d; font-weight:800;">🟢 Currently Available for Work (ಕೆಲಸಕ್ಕೆ ಲಭ್ಯ / काम के लिए उपलब्ध)</span>
+      `;
+      actionsContainer.innerHTML = `
+        <button class="btn btn-outline" style="background:#ffffff; color:#b91c1c; border:2px solid #ef4444; font-weight:800; font-size:0.92rem; padding:0.6rem 1.15rem; cursor:pointer;" onclick="toggleCurrentWorkerAvailability('busy')">
+          🔴 Switch to Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ)
+        </button>
+      `;
+    }
+  } catch (err) {
+    statusText.innerText = "Status unavailable";
+  }
+}
+
+async function toggleCurrentWorkerAvailability(newStatus) {
+  if (!currentUser || currentUser.role !== "worker") {
+    alert("⛔ Permission Denied: Employers cannot change worker availability status. Only workers can set their own status.");
+    return;
+  }
+  const workerId = currentUser.worker_id;
+  if (!workerId) {
+    alert("No linked worker ID found for this account.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/workers/${workerId}/status?availability=${newStatus}`, {
+      method: "POST",
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
+    });
+
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      alert(`⛔ Permission Denied: ${err.detail || "Only workers can set their own availability."}`);
+      return;
+    }
+
+    if (res.ok) {
+      const statusLabel = newStatus === 'busy' ? '🔴 Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ / काम में व्यस्त)' : '🟢 Available (ಲಭ್ಯ / उपलब्ध)';
+      alert(`✅ Your availability has been updated to:\n${statusLabel}`);
+      await loadWorkerAvailabilityBanner();
+      loadInsights();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`Error updating status: ${err.detail || "Please try again."}`);
+    }
+  } catch (e) {
+    alert("Network error updating status.");
+  }
+}
+
+// ============================================================================
+// Worker Hiring & Work Removal Management (Employer Scoped)
 // ============================================================================
 let activeHireTarget = null;
 
@@ -2072,22 +2188,31 @@ async function openHireModal(workerId, workerName, workerTrade) {
     <span style="color:#16a34a; font-weight:600;">Status will be updated to: 🔴 Busy in Work (काम में व्यस्त / ಕೆಲಸದಲ್ಲಿ ನಿರತ)</span>
   `;
 
-  jobSelect.innerHTML = "<option value=''>Loading work vacancies...</option>";
+  jobSelect.innerHTML = "<option value=''>Loading your work vacancies...</option>";
   modal.classList.add("active");
 
   try {
     const res = await fetch("/api/v1/jobs/?status=open&limit=100");
     const jobs = await res.json();
     jobSelect.innerHTML = "";
-    if (jobs && jobs.length > 0) {
-      jobs.forEach(j => {
+
+    // Strictly filter to jobs owned by this logged-in employer
+    const myJobs = (jobs || []).filter(j => {
+      if (!currentUser || currentUser.role !== 'employer') return false;
+      return (currentUser.phone && currentUser.phone === j.employer_phone) ||
+             (currentUser.company_name && currentUser.company_name.trim().toLowerCase() === (j.employer_name || '').trim().toLowerCase()) ||
+             (currentUser.full_name && currentUser.full_name.trim().toLowerCase() === (j.employer_name || '').trim().toLowerCase());
+    });
+
+    if (myJobs && myJobs.length > 0) {
+      myJobs.forEach(j => {
         jobSelect.innerHTML += `<option value="${j.id}">[ID: ${j.id}] ${j.title} - ${j.city} (Offered: ₹${j.wage_offered})</option>`;
       });
     } else {
-      jobSelect.innerHTML = "<option value=''>Direct Hire (No open work listings)</option>";
+      jobSelect.innerHTML = "<option value=''>Direct Contact (No open work listings posted by you)</option>";
     }
   } catch (err) {
-    jobSelect.innerHTML = "<option value=''>Direct Hire</option>";
+    jobSelect.innerHTML = "<option value=''>Direct Contact</option>";
   }
 }
 
@@ -2107,16 +2232,18 @@ async function confirmHireWorker() {
   try {
     if (jobId) {
       const res = await fetch(`/api/v1/jobs/${jobId}/hire/${activeHireTarget.workerId}?remove_job=${removeJob}`, {
-        method: "POST"
+        method: "POST",
+        headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
       });
+      if (res.status === 403) {
+        const err = await res.json().catch(() => ({}));
+        alert(`⛔ Permission Denied: ${err.detail || "Employers can only hire and remove their own job postings."}`);
+        return;
+      }
       const data = await res.json();
-      alert(`🎉 Success!\n\n${data.message || 'Worker hired successfully!'}\nWorker is now marked as 🔴 Busy in Work.\n${data.job_removed ? 'The work vacancy has been removed from marketplace.' : ''}`);
+      alert(`🎉 Success!\n\n${data.message || 'Worker hired successfully!'}\nWorker is now marked as 🔴 Busy in Work.\n${data.job_removed ? 'The work vacancy has been removed from the marketplace.' : ''}`);
     } else {
-      // Direct status toggle to busy
-      const res = await fetch(`/api/v1/workers/${activeHireTarget.workerId}/status?availability=busy`, {
-        method: "POST"
-      });
-      alert(`🎉 Worker '${activeHireTarget.workerName}' has been hired and marked as 🔴 Busy in Work!`);
+      alert(`💬 Inquiry initiated for worker '${activeHireTarget.workerName}'! Worker availability is managed by the worker directly.`);
     }
 
     closeHireModal();
@@ -2129,16 +2256,22 @@ async function confirmHireWorker() {
 }
 
 async function hireMatchedWorker(jobId, workerId, workerName) {
-  if (!confirm(`Hire worker '${workerName}' for this job opening?\n\nThis will:\n1. Mark the worker as 🔴 Busy in Work.\n2. Remove this work vacancy from the active marketplace.`)) {
+  if (!confirm(`Hire worker '${workerName}' for this job opening?\n\nThis will:\n1. Mark the worker as 🔴 Busy in Work.\n2. Remove your work vacancy from the active marketplace.`)) {
     return;
   }
 
   try {
     const res = await fetch(`/api/v1/jobs/${jobId}/hire/${workerId}?remove_job=true`, {
-      method: "POST"
+      method: "POST",
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
     });
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      alert(`⛔ Permission Denied: ${err.detail || "Employers can only hire for their own job postings."}`);
+      return;
+    }
     const data = await res.json();
-    alert(`🎉 Worker '${workerName}' hired!\n\nWorker status: 🔴 Busy in Work.\nThe work vacancy has been removed from the marketplace.`);
+    alert(`🎉 Worker '${workerName}' hired!\n\nWorker status: 🔴 Busy in Work.\nYour work vacancy has been removed from the marketplace.`);
     runMatching();
     loadJobFeed();
     loadWorkerFeed();
@@ -2149,33 +2282,67 @@ async function hireMatchedWorker(jobId, workerId, workerName) {
 }
 
 async function removeJobPosting(jobId, jobTitle) {
-  if (!confirm(`Are you sure you want to remove the work vacancy '${jobTitle}'?\n\n(Use this after you have hired a worker or the requirement is completed).`)) {
+  if (!currentUser || currentUser.role !== 'employer') {
+    alert("⛔ Permission Denied: Workers cannot remove job postings.");
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to remove your work vacancy '${jobTitle}'?\n\n(Use this after you have hired a worker or the work requirement is fulfilled).`)) {
     return;
   }
 
   try {
     const res = await fetch(`/api/v1/jobs/${jobId}`, {
-      method: "DELETE"
+      method: "DELETE",
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
     });
-    const data = await res.json();
-    alert(`🗑️ Work vacancy '${jobTitle}' has been removed successfully.`);
-    loadJobFeed();
-    loadInsights();
-    populateMatchingDropdowns();
+
+    if (res.status === 403) {
+      const data = await res.json().catch(() => ({}));
+      alert(`⛔ Permission Denied: ${data.detail || "You can only remove your own job postings, not those of other employers."}`);
+      return;
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      alert(`🗑️ Work vacancy '${jobTitle}' has been removed successfully.`);
+      loadJobFeed();
+      loadInsights();
+      populateMatchingDropdowns();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(`Error removing job: ${data.detail || "Please try again."}`);
+    }
   } catch (err) {
     alert("Error removing work vacancy.");
   }
 }
 
 async function toggleWorkerStatus(workerId, newStatus) {
+  if (!currentUser || currentUser.role !== "worker") {
+    alert("⛔ Permission Denied: Employers cannot change worker availability status. Only workers can set their own status.");
+    return;
+  }
+
   try {
     const res = await fetch(`/api/v1/workers/${workerId}/status?availability=${newStatus}`, {
-      method: "POST"
+      method: "POST",
+      headers: authToken ? { "Authorization": `Bearer ${authToken}` } : {}
     });
+
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      alert(`⛔ Permission Denied: ${err.detail || "Only workers can update their own status."}`);
+      return;
+    }
+
     const data = await res.json();
     alert(`Worker status updated to: ${newStatus === 'busy' ? '🔴 Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ / काम में व्यस्त)' : '🟢 Available (ಲಭ್ಯ / उपलब्ध)'}`);
     loadWorkerFeed();
     loadInsights();
+    if (currentUser && currentUser.role === 'worker') {
+      loadWorkerAvailabilityBanner();
+    }
   } catch (err) {
     alert("Error updating worker status.");
   }

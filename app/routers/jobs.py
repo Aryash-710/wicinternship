@@ -1,7 +1,8 @@
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from app.models.schemas import JobCreate, JobUpdate, JobResponse
 from app.services.job_service import JobService
+from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Jobs Microservice"])
 
@@ -61,13 +62,48 @@ def update_job(job_id: int, updates: JobUpdate):
 
 
 @router.delete("/{job_id}", status_code=200)
-def delete_job(job_id: int):
+def delete_job(
+    job_id: int,
+    authorization: Optional[str] = Header(None),
+    employer_phone: Optional[str] = Query(None)
+):
     """
-    Employers can remove/delete a job posting after hiring a worker or fulfilling work.
+    Employers can remove/delete their own job posting after hiring a worker or fulfilling work.
+    Workers and non-owner employers are forbidden from deleting job postings.
     """
     job = JobService.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
+
+    user = None
+    if authorization:
+        user = AuthService.get_user_by_token(authorization)
+
+    if user:
+        if user.get("role") == "worker":
+            raise HTTPException(
+                status_code=403,
+                detail="Workers are not authorized to remove job postings."
+            )
+        if user.get("role") == "employer":
+            user_phone = (user.get("phone") or "").strip()
+            job_emp_phone = (job.get("employer_phone") or "").strip()
+            user_comp = (user.get("company_name") or user.get("full_name") or "").strip().lower()
+            job_emp_name = (job.get("employer_name") or "").strip().lower()
+
+            is_owner = (user_phone and user_phone == job_emp_phone) or (user_comp and user_comp == job_emp_name)
+            if not is_owner:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Employers can only remove their own job postings, not those of other employers."
+                )
+    elif employer_phone and isinstance(employer_phone, str):
+        job_emp_phone = (job.get("employer_phone") or "").strip()
+        if employer_phone.strip() != job_emp_phone:
+            raise HTTPException(
+                status_code=403,
+                detail="Employers can only remove their own job postings, not those of other employers."
+            )
 
     success = JobService.delete_job(job_id)
     if not success:
@@ -83,14 +119,51 @@ def delete_job(job_id: int):
 def hire_worker_for_job(
     job_id: int,
     worker_id: int,
-    remove_job: bool = Query(True, description="Whether to remove the job listing after hiring")
+    remove_job: bool = Query(True, description="Whether to remove the job listing after hiring"),
+    authorization: Optional[str] = Header(None),
+    employer_phone: Optional[str] = Query(None)
 ):
     """
     Employer hires a worker for a job:
     1. Sets worker availability to 'busy' (showing worker is busy in work).
     2. Increments worker's jobs_completed count.
     3. If remove_job is True, deletes/removes the job listing from the marketplace.
+    Only the owning employer can hire for this job and remove it. Workers are forbidden.
     """
+    job = JobService.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    user = None
+    if authorization:
+        user = AuthService.get_user_by_token(authorization)
+
+    if user:
+        if user.get("role") == "worker":
+            raise HTTPException(
+                status_code=403,
+                detail="Workers are not authorized to hire or remove job postings."
+            )
+        if user.get("role") == "employer":
+            user_phone = (user.get("phone") or "").strip()
+            job_emp_phone = (job.get("employer_phone") or "").strip()
+            user_comp = (user.get("company_name") or user.get("full_name") or "").strip().lower()
+            job_emp_name = (job.get("employer_name") or "").strip().lower()
+
+            is_owner = (user_phone and user_phone == job_emp_phone) or (user_comp and user_comp == job_emp_name)
+            if not is_owner:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Employers can only hire and remove their own job postings."
+                )
+    elif employer_phone and isinstance(employer_phone, str):
+        job_emp_phone = (job.get("employer_phone") or "").strip()
+        if employer_phone.strip() != job_emp_phone:
+            raise HTTPException(
+                status_code=403,
+                detail="Employers can only hire and remove their own job postings."
+            )
+
     result = JobService.hire_worker_for_job(job_id=job_id, worker_id=worker_id, remove_job=remove_job)
     if not result:
         raise HTTPException(status_code=404, detail="Job or Worker not found")
