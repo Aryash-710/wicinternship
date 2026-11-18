@@ -196,7 +196,7 @@ class IVRService:
 
     @staticmethod
     def resolve_location(digits: Optional[str], speech: Optional[str]) -> Dict[str, str]:
-        # Priority 1: Direct spoken voice input for any location
+        # Priority 1: Direct spoken voice input or text input for any location
         s = (speech or "").strip()
         if s:
             cleaned = s.rstrip(".,!?").strip().title()
@@ -207,6 +207,12 @@ class IVRService:
         d = (digits or "").strip()
         if d in CITY_OPTIONS:
             return CITY_OPTIONS[d]
+
+        # Priority 3: Direct text input passed in digits parameter (e.g. user typed a city name)
+        if d:
+            cleaned = d.rstrip(".,!?").strip().title()
+            if cleaned:
+                return {"city": cleaned, "kn": cleaned, "hi": cleaned}
 
         return {"city": "Bengaluru", "kn": "ಬೆಂಗಳೂರು", "hi": "बेंगलुरु"}
 
@@ -559,20 +565,20 @@ class IVRService:
             if lang == "hindi":
                 prompt = (
                     f"{exp_val} वर्ष का अनुभव दर्ज हुआ। "
-                    "कृपया अपने शहर या स्थान का नाम सीधे बोलें।"
+                    "कृपया अपने शहर या स्थान का नाम सीधे बोलें या टाइप करें।"
                 )
                 prompt_roman = (
                     f"{exp_val} varsh ka anubhav darj hua. "
-                    "Kripya apne shahar ya sthan ka naam seedhe bolein."
+                    "Kripya apne shahar ya sthan ka naam seedhe bolein ya type karein."
                 )
             else:
                 prompt = (
                     f"{exp_val} ವರ್ಷಗಳ ಅನುಭವ ದಾಖಲಾಗಿದೆ. "
-                    "ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಗರ ಅಥವಾ ಸ್ಥಳದ ಹೆಸರನ್ನು ನೇರವಾಗಿ ಮಾತನಾಡಿ."
+                    "ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಗರ ಅಥವಾ ಸ್ಥಳದ ಹೆಸರನ್ನು ನೇರವಾಗಿ ಮಾತನಾಡಿ ಅಥವಾ ಟೈಪ್ ಮಾಡಿ."
                 )
                 prompt_roman = (
                     f"{exp_val} varshagala anubhava dakhlagide. "
-                    "Dayavittu nimma nagara athava sthalada hesarannu neravagi mathanadi."
+                    "Dayavittu nimma nagara athava sthalada hesarannu neravagi mathanadi athava type madi."
                 )
             
             # Options list is empty: location is taken purely from voice speech!

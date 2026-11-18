@@ -202,7 +202,15 @@ function openMainDashboard() {
     if (tabPostJob) tabPostJob.style.display = "none";
 
     // MUST SEE: Job Feed, Smart Matcher, Fair Wage, IVR Simulator
-    if (navBtnJobs) navBtnJobs.style.display = "inline-flex";
+    if (navBtnJobs) {
+      navBtnJobs.style.display = "inline-flex";
+      navBtnJobs.innerText = "📋 Job Feed";
+    }
+    const jfTitle = document.getElementById("job-feed-title");
+    const jfSub = document.getElementById("job-feed-subtitle");
+    if (jfTitle) jfTitle.innerText = "Live Job Opportunities for Workers";
+    if (jfSub) jfSub.innerText = "Browse verified work posted by households, shops, and contractors nearby.";
+
     if (tabJobs) tabJobs.style.display = "block";
     if (navBtnMatching) navBtnMatching.style.display = "inline-flex";
     if (navBtnWage) navBtnWage.style.display = "inline-flex";
@@ -233,8 +241,12 @@ function openMainDashboard() {
     }
     if (navBtnJobs) {
       navBtnJobs.style.display = "inline-flex";
-      navBtnJobs.innerText = "💼 Work Postings (ಕೆಲಸಗಳು)";
+      navBtnJobs.innerText = "💼 Your Work Postings (ನಿಮ್ಮ ಕೆಲಸಗಳು)";
     }
+    const jfTitle = document.getElementById("job-feed-title");
+    const jfSub = document.getElementById("job-feed-subtitle");
+    if (jfTitle) jfTitle.innerText = "Your Work Postings (ನಿಮ್ಮ ಕೆಲಸಗಳು / आपके पोस्ट किए गए काम)";
+    if (jfSub) jfSub.innerText = "Showing only your work vacancies. Manage postings, hire workers, and remove listings when fulfilled.";
     if (tabJobs) tabJobs.style.display = "block";
     if (navBtnPhone) navBtnPhone.style.display = "none";
     if (tabPhone) tabPhone.style.display = "none";
@@ -512,11 +524,29 @@ async function loadJobFeed() {
 
   try {
     const res = await fetch(`/api/v1/feeds/jobs?${params.toString()}`);
-    const jobs = await res.json();
+    let jobs = await res.json();
     grid.innerHTML = "";
 
+    // While showing work postings for the employer, just show his postings!
+    if (currentUser && currentUser.role === 'employer') {
+      jobs = (jobs || []).filter(job => {
+        return (currentUser.phone && currentUser.phone === job.employer_phone) ||
+               (currentUser.company_name && currentUser.company_name.trim().toLowerCase() === (job.employer_name || '').trim().toLowerCase()) ||
+               (currentUser.full_name && currentUser.full_name.trim().toLowerCase() === (job.employer_name || '').trim().toLowerCase());
+      });
+    }
+
     if (!jobs || jobs.length === 0) {
-      grid.innerHTML = "<p>No active jobs found matching your criteria.</p>";
+      if (currentUser && currentUser.role === 'employer') {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:2.2rem 1.5rem; text-align:center;">
+            <p style="font-size:1.05rem; font-weight:700; color:#334155; margin-bottom:0.4rem;">You have no active work postings.</p>
+            <p style="font-size:0.9rem; color:#64748b; margin-bottom:1rem;">Click <strong>'Post Work (Employer)'</strong> in the navigation bar to publish a job vacancy and hire workers.</p>
+          </div>
+        `;
+      } else {
+        grid.innerHTML = "<p>No active jobs found matching your criteria.</p>";
+      }
       return;
     }
 
@@ -1077,6 +1107,8 @@ function handlePhoneEndBtn() {
   const screen = document.getElementById("screen-text");
   const input = document.getElementById("phone-dial-input");
   const xmlDisplay = document.getElementById("twiml-display");
+  const locContainer = document.getElementById("phone-location-input-container");
+  if (locContainer) locContainer.style.display = "none";
 
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
@@ -1131,6 +1163,7 @@ async function startIvrCall(phone) {
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
     speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
+    checkAndToggleLocationInput(data.prompt_text);
   } catch (e) {
     screen.innerText = "Call failed to connect.\nPlease verify backend service is running.";
     updateCallStatusBadge("Failed", false);
@@ -1169,6 +1202,7 @@ async function sendIvrDigits(digits) {
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
     speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
+    checkAndToggleLocationInput(data.prompt_text);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;
@@ -1184,11 +1218,55 @@ async function sendIvrDigits(digits) {
   }
 }
 
+function checkAndToggleLocationInput(promptText) {
+  const locContainer = document.getElementById("phone-location-input-container");
+  const locInput = document.getElementById("phone-location-text");
+  const dialInput = document.getElementById("phone-dial-input");
+  if (!locContainer) return;
+
+  const isLocationStep = promptText && (
+    promptText.includes("शहर या स्थान") ||
+    promptText.includes("ನಗರ ಅಥವಾ ಸ್ಥಳ") ||
+    promptText.includes("shahar ya sthan") ||
+    promptText.includes("nagara athava sthala") ||
+    promptText.includes("स्थान का नाम") ||
+    promptText.includes("ಸ್ಥಳದ ಹೆಸರು")
+  );
+
+  if (isLocationStep) {
+    locContainer.style.display = "block";
+    if (locInput) {
+      locInput.value = "";
+      setTimeout(() => locInput.focus(), 150);
+    }
+    if (dialInput) {
+      dialInput.placeholder = "👉 अपना शहर यहां टाइप करें (उदा: Bengaluru) और Enter दबाएं";
+    }
+  } else {
+    locContainer.style.display = "none";
+    if (dialInput) {
+      dialInput.placeholder = "कीपैड दबाएं या 🎙️ SPEAK पर क्लिक करें";
+    }
+  }
+}
+
+function submitLocationText() {
+  const locInput = document.getElementById("phone-location-text");
+  const val = locInput ? locInput.value.trim() : "";
+  if (!val) return;
+  const locContainer = document.getElementById("phone-location-input-container");
+  if (locContainer) locContainer.style.display = "none";
+  if (locInput) locInput.value = "";
+  sendIvrVoice(val);
+}
+
 function handleDialInputEnter() {
   const input = document.getElementById("phone-dial-input");
   if (!input || !input.value.trim()) return;
   const val = input.value.trim();
   input.value = "";
+  const locContainer = document.getElementById("phone-location-input-container");
+  if (locContainer) locContainer.style.display = "none";
   if (!isIvrCallActive) {
     const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
     startIvrCall(phone).then(() => {
@@ -1402,6 +1480,7 @@ async function sendIvrVoice(speechText) {
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
     speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
+    checkAndToggleLocationInput(data.prompt_text);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;

@@ -673,6 +673,28 @@ def test_ivr_web_simulator_pure_hindi_flow():
     assert "श्रमिक पंजीकरण में आपका स्वागत है" in res1.prompt_text
     assert "ಕನ್ನಡ" not in res1.prompt_text
 
+    # Step 2: Select trade (1 for Electrician)
+    res2 = process_ivr(IVRRequest(call_sid=call_sid, caller_phone=phone, digits="1", language="hindi"))
+    assert res2.action == "gather"
+    assert "अनुभव" in res2.prompt_text
+
+    # Step 3: Experience (3 years)
+    res3 = process_ivr(IVRRequest(call_sid=call_sid, caller_phone=phone, digits="3", language="hindi"))
+    assert res3.action == "gather"
+    assert "शहर या स्थान" in res3.prompt_text
+    # Should invite text or spoken input
+    assert "टाइप करें" in res3.prompt_text
+
+    # Step 4: TEXT INPUT for location in web simulator: e.g. "Hassan Rural"
+    res4 = process_ivr(IVRRequest(call_sid=call_sid, caller_phone=phone, digits="", speech_result="Hassan Rural", language="hindi"))
+    assert res4.action == "hangup"
+    assert "सफलतापूर्वक पंजीकृत" in res4.prompt_text
+
+    from app.services.worker_service import WorkerService
+    registered_w = WorkerService.get_worker_by_phone(phone)
+    assert registered_w is not None
+    assert registered_w["city"] == "Hassan Rural"
+
 
 def test_worker_status_and_job_deletion_ownership_permissions():
     from app.database import get_db
