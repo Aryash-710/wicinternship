@@ -16,9 +16,16 @@ class WorkerService:
             lat = resolved_lat
             lon = resolved_lon
 
+        # Auto-compute fair wage if daily_rate is not provided
+        daily = worker.daily_rate
+        if daily is None or daily <= 0:
+            from app.services.wage_service import FairWageService
+            pred = FairWageService.predict_fair_wage(worker.trade, worker.city, worker.experience_years)
+            daily = float(pred.get("recommended_daily_wage", 750.0))
+
         hourly = worker.hourly_rate
         if hourly is None:
-            hourly = round(worker.daily_rate / 8.0, 1)
+            hourly = round(daily / 8.0, 1)
 
         with get_db() as conn:
             cursor = conn.cursor()
@@ -29,7 +36,7 @@ class WorkerService:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 worker.name, worker.phone, worker.trade, worker.secondary_skills,
-                worker.experience_years, worker.daily_rate, hourly,
+                worker.experience_years, daily, hourly,
                 worker.city, worker.area or worker.city, lat, lon,
                 worker.availability, worker.language_pref, worker.source
             ))

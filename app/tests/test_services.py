@@ -156,6 +156,12 @@ def test_ivr_service_direct_unit_flows():
     call_sid = "CALL_UNIT_TEST_99"
     phone = "9845000111"
 
+    from app.database import get_db
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
+
     # Step 1: Initial call greeting
     res_welcome = IVRService.handle_ivr_call(call_sid, phone, digits=None)
     assert res_welcome["action"] == "gather"
@@ -164,11 +170,32 @@ def test_ivr_service_direct_unit_flows():
     assert "श्रमसेतु में आपका स्वागत है" in res_welcome["prompt_text"]
     assert len(res_welcome["options"]) == 3
 
-    # Step 2: Option 1 - Worker Registration
-    res_reg = IVRService.handle_ivr_call(call_sid, phone, digits="1")
-    assert res_reg["action"] == "hangup"
-    assert "<Hangup/>" in res_reg["twiml_xml"]
-    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_reg["prompt_text"] or "ನೋಂದಾಯಿತವಾಗಿದೆ" in res_reg["prompt_text"]
+    # Step 2: Option 1 - Worker Registration (Interactive Multi-step)
+    # 2a: Press 1 from menu -> Prompt trade
+    res_reg1 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
+    assert res_reg1["action"] == "gather"
+    assert "ವೃತ್ತಿಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg1["prompt_text"]
+
+    # 2b: Choose trade (e.g. 1 for Electrician) -> Prompt experience
+    res_reg2 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
+    assert res_reg2["action"] == "gather"
+    assert "ಅನುಭವದ ವರ್ಷಗಳನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg2["prompt_text"]
+
+    # 2c: Choose experience (e.g. 3 for 3 years) -> Prompt city
+    res_reg3 = IVRService.handle_ivr_call(call_sid, phone, digits="3")
+    assert res_reg3["action"] == "gather"
+    assert "ಸ್ಥಳ ಅಥವಾ ನಗರವನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg3["prompt_text"]
+
+    # 2d: Choose city (e.g. 1 for Bengaluru) -> Finalize & hangup
+    res_reg4 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
+    assert res_reg4["action"] == "hangup"
+    assert "<Hangup/>" in res_reg4["twiml_xml"]
+    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_reg4["prompt_text"]
+
+    # 2e: If calling again with same phone, confirms existing registration
+    res_again = IVRService.handle_ivr_call("CALL_UNIT_TEST_99_AGAIN", phone, digits="1")
+    assert res_again["action"] == "hangup"
+    assert "ನೋಂದಾಯಿತವಾಗಿದೆ" in res_again["prompt_text"]
 
     # Step 3: Option 2 - Find Jobs Voice Readout
     call_sid_2 = "CALL_UNIT_TEST_88"
@@ -185,10 +212,19 @@ def test_ivr_service_direct_unit_flows():
 
 
 def test_ivr_voice_bilingual_api_flow(client):
+    call_sid = "CALL_TEST_101"
+    phone = "9845011999"
+
+    from app.database import get_db
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
+
     # Call greeting via API
     res = client.post("/api/v1/telecom/ivr", json={
-        "call_sid": "CALL_TEST_101",
-        "caller_phone": "9845011999",
+        "call_sid": call_sid,
+        "caller_phone": phone,
         "digits": ""
     })
     assert res.status_code == 200
@@ -197,16 +233,44 @@ def test_ivr_voice_bilingual_api_flow(client):
     assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in data["prompt_text"]
     assert "श्रमसेतु में आपका स्वागत है" in data["prompt_text"]
 
-    # Press Digit 1 for registration
+    # Press Digit 1 for registration -> prompts trade
     res_reg = client.post("/api/v1/telecom/ivr", json={
-        "call_sid": "CALL_TEST_101",
-        "caller_phone": "9845011999",
+        "call_sid": call_sid,
+        "caller_phone": phone,
         "digits": "1"
     })
     assert res_reg.status_code == 200
     data_reg = res_reg.json()
-    assert data_reg["action"] == "hangup"
-    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in data_reg["prompt_text"] or "ನೋಂದಾಯಿತವಾಗಿದೆ" in data_reg["prompt_text"]
+    assert data_reg["action"] == "gather"
+    assert "ವೃತ್ತಿ" in data_reg["prompt_text"]
+
+    # Step trade: 2 (Plumber)
+    res_trade = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "2"
+    })
+    assert res_trade.status_code == 200
+    assert "ಅನುಭವ" in res_trade.json()["prompt_text"]
+
+    # Step exp: 4 (4 years)
+    res_exp = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "4"
+    })
+    assert res_exp.status_code == 200
+    assert "ಸ್ಥಳ" in res_exp.json()["prompt_text"]
+
+    # Step city: 1 (Bengaluru)
+    res_city = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "1"
+    })
+    assert res_city.status_code == 200
+    assert res_city.json()["action"] == "hangup"
+    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_city.json()["prompt_text"]
 
 
 def test_auth_service_and_roles():
@@ -363,5 +427,39 @@ def test_chat_initiate_and_realtime_broadcast():
         assert not chat_manager.is_user_online(999)
 
     asyncio.run(async_test())
+
+
+def test_custom_location_and_no_wage_input(client):
+    from app.services.auth_service import AuthService
+    from app.services.worker_service import WorkerService
+    from app.database import get_db
+
+    phone = "9845077889"
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
+
+    # Register worker with custom location and NO daily_rate specified
+    reg_payload = {
+        "username": "kanaka_carpenter",
+        "phone": phone,
+        "password": "password123",
+        "role": "worker",
+        "full_name": "Nagaraj Carpenter",
+        "trade": "Carpenter",
+        "experience_years": 5,
+        "city": "Kanakapura Rural"
+    }
+    res = client.post("/api/v1/auth/register", json=reg_payload)
+    assert res.status_code == 201
+    user = res.json()["user"]
+    assert user["city"] == "Kanakapura Rural"
+
+    # Worker record should have auto-calculated fair wage
+    worker = WorkerService.get_worker_by_phone(phone)
+    assert worker is not None
+    assert worker["city"] == "Kanakapura Rural"
+    assert worker["daily_rate"] > 0
+    assert worker["daily_rate"] >= 800.0
 
 

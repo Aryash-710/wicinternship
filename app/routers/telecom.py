@@ -15,7 +15,8 @@ async def process_ivr(req: IVRRequest):
     res = IVRService.handle_ivr_call(
         call_sid=req.call_sid,
         phone=req.caller_phone,
-        digits=req.digits
+        digits=req.digits,
+        action_url="/api/v1/telecom/ivr/twiml"
     )
     return IVRResponse(**res)
 
@@ -33,7 +34,8 @@ async def process_ivr_twiml(
     res = IVRService.handle_ivr_call(
         call_sid=CallSid,
         phone=From,
-        digits=Digits
+        digits=Digits,
+        action_url="/api/v1/telecom/ivr/twiml"
     )
     return Response(content=res["twiml_xml"], media_type="application/xml")
 
@@ -50,7 +52,8 @@ async def process_ivr_exotel(
     res = IVRService.handle_ivr_call(
         call_sid=CallSid,
         phone=From,
-        digits=Digits
+        digits=Digits,
+        action_url="/api/v1/telecom/ivr/exotel"
     )
     return Response(content=res["twiml_xml"], media_type="application/xml")
 

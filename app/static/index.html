@@ -142,26 +142,14 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>Daily Wage Rate ₹ (ದಿನಗೂಲಿ):</label>
-                <input type="number" id="reg-w-rate" class="form-control" value="850" min="400" required>
+                <label>Experience (Years):</label>
+                <input type="number" id="reg-w-exp" class="form-control" value="3" min="0" max="35" required>
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Experience (Years):</label>
-                <input type="number" id="reg-w-exp" class="form-control" value="3" min="0" max="35" required>
-              </div>
-              <div class="form-group">
-                <label>City (ನಗರ):</label>
-                <select id="reg-w-city" class="form-control" required>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Mysuru">Mysuru</option>
-                  <option value="Hubballi">Hubballi</option>
-                  <option value="Belagavi">Belagavi</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Lucknow">Lucknow</option>
-                  <option value="Patna">Patna</option>
-                </select>
+                <label>City / Location (ನಗರ / ಸ್ಥಳ):</label>
+                <input type="text" id="reg-w-city" class="form-control" placeholder="Enter any city, town, or district (e.g. Bengaluru, Mysuru, Hassan...)" list="city-suggestions" required>
               </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%; margin-top:0.75rem; justify-content:center; padding:0.75rem;">
@@ -189,16 +177,8 @@
                 <input type="text" id="reg-e-phone" class="form-control" placeholder="9900112233" required>
               </div>
               <div class="form-group">
-                <label>City (ನಗರ):</label>
-                <select id="reg-e-city" class="form-control" required>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Mysuru">Mysuru</option>
-                  <option value="Hubballi">Hubballi</option>
-                  <option value="Belagavi">Belagavi</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Lucknow">Lucknow</option>
-                  <option value="Patna">Patna</option>
-                </select>
+                <label>City / Location (ನಗರ / ಸ್ಥಳ):</label>
+                <input type="text" id="reg-e-city" class="form-control" placeholder="Enter any city, town, or district" list="city-suggestions" required>
               </div>
             </div>
             <div class="form-row">
@@ -323,15 +303,7 @@
               <option value="Helper">Helper (ಕೂಲಿ ಕಾರ್ಮಿಕ)</option>
               <option value="Welder">Welder (ವೆಲ್ಡರ್)</option>
             </select>
-            <select id="filter-job-city" class="form-control" style="width:auto;" onchange="loadJobFeed()">
-              <option value="">All Cities (ಎಲ್ಲ ನಗರಗಳು)</option>
-              <option value="Bengaluru">Bengaluru</option>
-              <option value="Mysuru">Mysuru</option>
-              <option value="Hubballi">Hubballi</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Lucknow">Lucknow</option>
-              <option value="Patna">Patna</option>
-            </select>
+            <input type="text" id="filter-job-city" class="form-control" placeholder="Search city / place..." list="city-suggestions" oninput="loadJobFeed()" style="width:180px;">
             <button class="btn btn-secondary" onclick="loadJobFeed()">🔄 Refresh</button>
           </div>
         </div>
@@ -358,15 +330,7 @@
               <option value="Helper">Helper</option>
               <option value="Welder">Welder</option>
             </select>
-            <select id="filter-worker-city" class="form-control" style="width:auto;" onchange="loadWorkerFeed()">
-              <option value="">All Cities</option>
-              <option value="Bengaluru">Bengaluru</option>
-              <option value="Mysuru">Mysuru</option>
-              <option value="Hubballi">Hubballi</option>
-              <option value="Delhi">Delhi</option>
-              <option value="Lucknow">Lucknow</option>
-              <option value="Patna">Patna</option>
-            </select>
+            <input type="text" id="filter-worker-city" class="form-control" placeholder="Search city / place..." list="city-suggestions" oninput="loadWorkerFeed()" style="width:180px;">
             <button class="btn btn-secondary" onclick="loadWorkerFeed()">🔄 Refresh</button>
           </div>
         </div>
@@ -439,18 +403,8 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>City (ನಗರ / शहर):</label>
-                <select id="wage-city" class="form-control" required>
-                  <option value="Bengaluru">Bengaluru (Tier-1 / ಕರ್ನಾಟಕ)</option>
-                  <option value="Mysuru">Mysuru (Tier-2 / ಕರ್ನಾಟಕ)</option>
-                  <option value="Hubballi">Hubballi (Tier-2 / ಕರ್ನಾಟಕ)</option>
-                  <option value="Belagavi">Belagavi (Tier-2 / ಕರ್ನಾಟಕ)</option>
-                  <option value="Davanagere">Davanagere (Tier-3 / ಕರ್ನಾಟಕ)</option>
-                  <option value="Delhi">Delhi (Tier-1)</option>
-                  <option value="Lucknow">Lucknow (Tier-2)</option>
-                  <option value="Patna">Patna (Tier-2)</option>
-                  <option value="Jaipur">Jaipur (Tier-2)</option>
-                </select>
+                <label>City / Location (ನಗರ / शहर):</label>
+                <input type="text" id="wage-city" class="form-control" placeholder="Enter any city or town" list="city-suggestions" value="Bengaluru" required>
               </div>
             </div>
             <div class="form-row">
@@ -517,16 +471,8 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>City (ನಗರ):</label>
-                <select id="job-city" class="form-control" required>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Mysuru">Mysuru</option>
-                  <option value="Hubballi">Hubballi</option>
-                  <option value="Belagavi">Belagavi</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Lucknow">Lucknow</option>
-                  <option value="Patna">Patna</option>
-                </select>
+                <label>City / Location (ನಗರ / ಸ್ಥಳ):</label>
+                <input type="text" id="job-city" class="form-control" placeholder="Enter any city, town, or location" list="city-suggestions" required>
               </div>
               <div class="form-group">
                 <label>Locality / Area (ಬಡಾವಣೆ/ಪ್ರದೇಶ):</label>
@@ -789,6 +735,52 @@ Press 📞 CALL or dial from any real mobile phone!
     </div>
 
   </div>
+
+  <datalist id="city-suggestions">
+    <option value="Bengaluru"></option>
+    <option value="Mysuru"></option>
+    <option value="Hubballi"></option>
+    <option value="Belagavi"></option>
+    <option value="Mangaluru"></option>
+    <option value="Kalaburagi"></option>
+    <option value="Davanagere"></option>
+    <option value="Ballari"></option>
+    <option value="Vijayapura"></option>
+    <option value="Shivamogga"></option>
+    <option value="Tumakuru"></option>
+    <option value="Raichur"></option>
+    <option value="Bidar"></option>
+    <option value="Hosapete"></option>
+    <option value="Gadag"></option>
+    <option value="Haveri"></option>
+    <option value="Hassan"></option>
+    <option value="Udupi"></option>
+    <option value="Mandya"></option>
+    <option value="Chikkamagaluru"></option>
+    <option value="Kolar"></option>
+    <option value="Chitradurga"></option>
+    <option value="Bagalkote"></option>
+    <option value="Koppal"></option>
+    <option value="Yadgir"></option>
+    <option value="Chamarajanagar"></option>
+    <option value="Ramanagara"></option>
+    <option value="Madikeri"></option>
+    <option value="Delhi"></option>
+    <option value="Lucknow"></option>
+    <option value="Kanpur"></option>
+    <option value="Patna"></option>
+    <option value="Jaipur"></option>
+    <option value="Varanasi"></option>
+    <option value="Indore"></option>
+    <option value="Bhopal"></option>
+    <option value="Ranchi"></option>
+    <option value="Agra"></option>
+    <option value="Mumbai"></option>
+    <option value="Pune"></option>
+    <option value="Hyderabad"></option>
+    <option value="Chennai"></option>
+    <option value="Kolkata"></option>
+  </datalist>
 
   <script src="/static/js/app.js"></script>
 </body>

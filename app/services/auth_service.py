@@ -34,7 +34,7 @@ class AuthService:
         full_name: str,
         city: Optional[str] = "Bengaluru",
         trade: Optional[str] = None,
-        daily_rate: Optional[float] = 700.0,
+        daily_rate: Optional[float] = None,
         experience_years: Optional[int] = 2,
         company_name: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -69,7 +69,7 @@ class AuthService:
                         phone=phone,
                         trade=trade or "Helper",
                         experience_years=experience_years or 2,
-                        daily_rate=daily_rate or 700.0,
+                        daily_rate=daily_rate,
                         city=city or "Bengaluru",
                         source="web"
                     )

@@ -347,16 +347,16 @@ async function handleRegister(e, role) {
     payload.username = document.getElementById("reg-w-user").value.trim();
     payload.password = document.getElementById("reg-w-pass").value;
     payload.trade = document.getElementById("reg-w-trade").value;
-    payload.daily_rate = parseFloat(document.getElementById("reg-w-rate").value) || 850;
+    payload.daily_rate = null; // Auto-computed via fair wage engine; not asked during registration
     payload.experience_years = parseInt(document.getElementById("reg-w-exp").value) || 3;
-    payload.city = document.getElementById("reg-w-city").value;
+    payload.city = document.getElementById("reg-w-city").value.trim();
   } else {
     payload.full_name = document.getElementById("reg-e-name").value.trim();
     payload.company_name = document.getElementById("reg-e-comp").value.trim() || payload.full_name;
     payload.phone = document.getElementById("reg-e-phone").value.trim();
     payload.username = document.getElementById("reg-e-user").value.trim();
     payload.password = document.getElementById("reg-e-pass").value;
-    payload.city = document.getElementById("reg-e-city").value;
+    payload.city = document.getElementById("reg-e-city").value.trim();
   }
 
   try {
@@ -1066,7 +1066,11 @@ async function sendIvrDigits(digits) {
       })
     });
     const data = await res.json();
-    screen.innerText = `📞 ACTIVE CALL (DTMF: ${digits})\n\n${data.prompt_text}`;
+    let screenMsg = `📞 ACTIVE CALL (DTMF: ${digits})\n\n${data.prompt_text}`;
+    if (data.options && data.options.length > 0 && !data.prompt_text.includes("1:")) {
+      screenMsg += "\n\nOptions:\n" + data.options.map(o => `[${o.digit}] ${o.label}`).join("\n");
+    }
+    screen.innerText = screenMsg;
     if (xmlDisplay) {
       xmlDisplay.innerText = data.twiml_xml || "<!-- No TwiML -->";
     }
@@ -1074,14 +1078,11 @@ async function sendIvrDigits(digits) {
     lastIvrAudioText = data.prompt_audio_text;
     speakBilingualPrompt(data.prompt_text || lastIvrAudioText);
 
-    if (digits === "1") {
-      loadWorkerFeed();
-      loadInsights();
-    }
-
     if (data.action === "hangup") {
       isIvrCallActive = false;
       updateCallStatusBadge("Completed", false);
+      loadWorkerFeed();
+      loadInsights();
       setTimeout(() => {
         screen.innerText += "\n\n[Call completed - Audio hung up]";
       }, 3500);

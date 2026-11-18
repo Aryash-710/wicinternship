@@ -11,7 +11,7 @@ class WorkerBase(BaseModel):
     trade: str = Field(..., examples=["Electrician"])
     secondary_skills: Optional[str] = Field(None, examples=["Wiring, Inverter, MCB"])
     experience_years: int = Field(default=1, ge=0, le=50, examples=[5])
-    daily_rate: float = Field(..., gt=0, examples=[850.0])
+    daily_rate: Optional[float] = Field(default=None, gt=0, examples=[850.0])
     hourly_rate: Optional[float] = Field(None, gt=0, examples=[150.0])
     city: str = Field(..., examples=["Bengaluru"])
     area: Optional[str] = Field(None, examples=["Rajajinagar"])
@@ -209,7 +209,7 @@ class UserRegisterRequest(BaseModel):
     full_name: str = Field(..., examples=["Ramesh Gowda"])
     city: Optional[str] = Field(default="Bengaluru", examples=["Bengaluru"])
     trade: Optional[str] = Field(default="Electrician", examples=["Electrician"])  # for worker
-    daily_rate: Optional[float] = Field(default=800.0, examples=[800.0])          # for worker
+    daily_rate: Optional[float] = Field(default=None, examples=[800.0])          # for worker, auto-computed via fair wage if omitted
     experience_years: Optional[int] = Field(default=3, examples=[3])              # for worker
     company_name: Optional[str] = Field(default=None, examples=["Shree Traders"]) # for employer
 
