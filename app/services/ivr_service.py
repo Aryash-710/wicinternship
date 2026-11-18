@@ -196,17 +196,19 @@ class IVRService:
 
     @staticmethod
     def resolve_location(digits: Optional[str], speech: Optional[str]) -> Dict[str, str]:
-        d = (digits or "").strip()
-        if d in CITY_OPTIONS:
-            return CITY_OPTIONS[d]
-
+        # Priority 1: Direct spoken voice input for any location
         s = (speech or "").strip()
         if s:
             cleaned = s.rstrip(".,!?").strip().title()
             if cleaned:
-                return {"city": cleaned, "kn": s, "hi": s}
+                return {"city": cleaned, "kn": cleaned, "hi": cleaned}
 
-        return CITY_OPTIONS["1"]
+        # Priority 2: Keypad digit fallback if pressed
+        d = (digits or "").strip()
+        if d in CITY_OPTIONS:
+            return CITY_OPTIONS[d]
+
+        return {"city": "Bengaluru", "kn": "ಬೆಂಗಳೂರು", "hi": "बेंगलुरु"}
 
     @classmethod
     def _build_response(
@@ -216,12 +218,19 @@ class IVRService:
         language: str,
         action: str = "gather",
         options: Optional[List[Dict[str, str]]] = None,
-        action_url: str = "/api/v1/telecom/ivr/twiml"
+        action_url: str = "/api/v1/telecom/ivr/twiml",
+        prompt_romanized: Optional[str] = None,
+        prompt_audio_text: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Builds TwiML XML and response payload in the user's chosen language.
+        Includes romanized phonetic fallback text for browser speech synthesis
+        when the client machine doesn't have native Indian language voice packs installed.
         """
         opts = options or []
+        audio_txt = prompt_audio_text or prompt
+        roman_txt = prompt_romanized or prompt
+
         if language == "hindi":
             voice_tag = f'<Say language="hi-IN" voice="Polly.Aditi">{prompt}</Say>'
         elif language == "kannada":
@@ -252,7 +261,8 @@ class IVRService:
             "call_sid": call_sid,
             "twiml_xml": twiml,
             "prompt_text": prompt,
-            "prompt_audio_text": prompt,
+            "prompt_audio_text": audio_txt,
+            "prompt_romanized": roman_txt,
             "language": language,
             "action": action,
             "options": opts
@@ -290,6 +300,10 @@ class IVRService:
                 "[ಕನ್ನಡ]: ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕನ್ನಡಕ್ಕಾಗಿ 1 ಒತ್ತಿ.\n"
                 "[हिन्दी]: नमस्कार, श्रमसेतु में आपका स्वागत है। हिन्दी के लिए 2 दबाएं।"
             )
+            greeting_roman = (
+                "[KN]: Namaskara, KaayakaSetuvige swagatha. Kannadakkagi 1 otti.\n"
+                "[HI]: Namaskar, ShramSetu mein aapka swaagat hai. Hindi ke liye 2 dabayein."
+            )
             return cls._build_response(
                 call_sid=call_sid,
                 prompt=greeting_prompt,
@@ -299,7 +313,8 @@ class IVRService:
                     {"digit": "1", "label": "ಕನ್ನಡ (Kannada - Press 1)"},
                     {"digit": "2", "label": "हिन्दी (Hindi - Press 2)"}
                 ],
-                action_url=action_url
+                action_url=action_url,
+                prompt_romanized=greeting_roman
             )
 
         # -------------------------------------------------------------
@@ -323,6 +338,12 @@ class IVRService:
                     "2: आज के नए काम सुनने के लिए 2 दबाएं।\n"
                     "3: उचित दैनिक मजदूरी दर जानने के लिए 3 दबाएं।"
                 )
+                menu_roman = (
+                    "ShramSetu mein aapka swaagat hai. "
+                    "Shramik profile darj karne ke liye 1 dabayein. "
+                    "Naye kaam sunne ke liye 2 dabayein. "
+                    "Uchit dainik mazdoori dar janne ke liye 3 dabayein."
+                )
                 options = [
                     {"digit": "1", "label": "श्रमिक पंजीकरण (Register Profile)"},
                     {"digit": "2", "label": "नए काम खोजें (Find Jobs)"},
@@ -334,6 +355,12 @@ class IVRService:
                     "1: ಕಾರ್ಮಿಕ ಪ್ರೊಫೈಲ್ ನೋಂದಾಯಿಸಲು 1 ಒತ್ತಿ.\n"
                     "2: ಇಂದಿನ ಹೊಸ ಕೆಲಸಗಳ ಮಾಹಿತಿ ಕೇಳಲು 2 ಒತ್ತಿ.\n"
                     "3: ನ್ಯಾಯಯುತ ದಿನಗೂಲಿ ದರ ತಿಳಿಯಲು 3 ಒತ್ತಿ."
+                )
+                menu_roman = (
+                    "KaayakaSetuvige swagatha. "
+                    "Karmika profile nondaisalu 1 otti. "
+                    "Indina hosa kelasagala mahiti kelalu 2 otti. "
+                    "Nyayayuta dinagooli dara thiliyaloo 3 otti."
                 )
                 options = [
                     {"digit": "1", "label": "ಕಾರ್ಮಿಕ ನೋಂದಣಿ (Register Profile)"},
@@ -347,7 +374,8 @@ class IVRService:
                 language=chosen_lang,
                 action="gather",
                 options=options,
-                action_url=action_url
+                action_url=action_url,
+                prompt_romanized=menu_roman if chosen_lang == "hindi" else menu_roman
             )
 
         # -------------------------------------------------------------
@@ -482,7 +510,7 @@ class IVRService:
             return cls._build_response(call_sid, prompt, lang, action="gather", options=options, action_url=action_url)
 
         # -------------------------------------------------------------
-        # Step 4: Experience Input Received -> Prompt Location in chosen language
+        # Step 4: Experience Input Received -> Prompt Location SOLELY by Voice (No Options)
         # -------------------------------------------------------------
         if step == "reg_exp":
             exp_val = cls.resolve_experience(digits, speech)
@@ -493,36 +521,32 @@ class IVRService:
             if lang == "hindi":
                 prompt = (
                     f"{exp_val} वर्ष का अनुभव दर्ज हुआ। "
-                    "अपने शहर या स्थान का नाम सीधे बोलें, "
-                    "या संख्या दबाएं: 1 बेंगलुरु, 2 मैसूर, 3 हुबली, 4 बेलगाम, 5 मंगलुरु, 6 कलबुर्गी, 7 दिल्ली, 8 अन्य जिला।"
+                    "कृपया अपने शहर या स्थान का नाम सीधे बोलें।"
                 )
-                options = [
-                    {"digit": "1", "label": "बेंगलुरु (Bengaluru)"},
-                    {"digit": "2", "label": "मैसूर (Mysuru)"},
-                    {"digit": "3", "label": "हुबली (Hubballi)"},
-                    {"digit": "4", "label": "बेलगाम (Belagavi)"},
-                    {"digit": "5", "label": "मंगलुरु (Mangaluru)"},
-                    {"digit": "6", "label": "कलबुर्गी (Kalaburagi)"},
-                    {"digit": "7", "label": "दिल्ली (Delhi)"},
-                    {"digit": "8", "label": "अन्य जिला (Other)"}
-                ]
+                prompt_roman = (
+                    f"{exp_val} varsh ka anubhav darj hua. "
+                    "Kripya apne shahar ya sthan ka naam seedhe bolein."
+                )
             else:
                 prompt = (
                     f"{exp_val} ವರ್ಷಗಳ ಅನುಭವ ದಾಖಲಾಗಿದೆ. "
-                    "ನಿಮ್ಮ ನಗರ ಅಥವಾ ಸ್ಥಳದ ಹೆಸರನ್ನು ನೇರವಾಗಿ ಮಾತನಾಡಿ, "
-                    "ಅಥವಾ ಸಂಖ್ಯೆ ಒತ್ತಿ: 1 ಬೆಂಗಳೂರು, 2 ಮೈಸೂರು, 3 ಹುಬ್ಬಳ್ಳಿ, 4 ಬೆಳಗಾವಿ, 5 ಮಂಗಳೂರು, 6 ಕಲಬುರಗಿ, 7 ದೆಹಲಿ, 8 ಹಾಸನ ಅಥವಾ ಇತರ ಜಿಲ್ಲೆ."
+                    "ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಗರ ಅಥವಾ ಸ್ಥಳದ ಹೆಸರನ್ನು ನೇರವಾಗಿ ಮಾತನಾಡಿ."
                 )
-                options = [
-                    {"digit": "1", "label": "ಬೆಂಗಳೂರು (Bengaluru)"},
-                    {"digit": "2", "label": "ಮೈಸೂರು (Mysuru)"},
-                    {"digit": "3", "label": "ಹುಬ್ಬಳ್ಳಿ (Hubballi)"},
-                    {"digit": "4", "label": "ಬೆಳಗಾವಿ (Belagavi)"},
-                    {"digit": "5", "label": "ಮಂಗಳೂರು (Mangaluru)"},
-                    {"digit": "6", "label": "ಕಲಬುರಗಿ (Kalaburagi)"},
-                    {"digit": "7", "label": "ದೆಹಲಿ (Delhi)"},
-                    {"digit": "8", "label": "ಹಾಸನ ಅಥವಾ ಇತರ (Hassan/Other)"}
-                ]
-            return cls._build_response(call_sid, prompt, lang, action="gather", options=options, action_url=action_url)
+                prompt_roman = (
+                    f"{exp_val} varshagala anubhava dakhlagide. "
+                    "Dayavittu nimma nagara athava sthalada hesarannu neravagi mathanadi."
+                )
+            
+            # Options list is empty: location is taken purely from voice speech!
+            return cls._build_response(
+                call_sid=call_sid,
+                prompt=prompt,
+                language=lang,
+                action="gather",
+                options=[],
+                action_url=action_url,
+                prompt_romanized=prompt_roman
+            )
 
         # -------------------------------------------------------------
         # Step 5: Location Input Received -> Finalize Registration in chosen language

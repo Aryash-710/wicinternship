@@ -51,30 +51,30 @@ class AuthService:
         hashed = cls.hash_password(password)
         worker_id = None
 
+        # Check worker record outside the transaction to prevent nested SQLite connections
+        if role == "worker":
+            existing_worker = WorkerService.get_worker_by_phone(phone)
+            if existing_worker:
+                worker_id = existing_worker["id"]
+            else:
+                new_w = WorkerCreate(
+                    name=full_name,
+                    phone=phone,
+                    trade=trade or "Helper",
+                    experience_years=experience_years or 2,
+                    daily_rate=daily_rate,
+                    city=city or "Bengaluru",
+                    source="web"
+                )
+                created_w = WorkerService.create_worker(new_w)
+                worker_id = created_w["id"]
+
         with get_db() as conn:
             cursor = conn.cursor()
             # Check for existing username or phone
             cursor.execute("SELECT id FROM users WHERE username = ? OR phone = ?", (username, phone))
             if cursor.fetchone():
                 raise ValueError("A user with this username or phone number already exists.")
-
-            # If worker, check if worker record already exists by phone, or create a new one
-            if role == "worker":
-                existing_worker = WorkerService.get_worker_by_phone(phone)
-                if existing_worker:
-                    worker_id = existing_worker["id"]
-                else:
-                    new_w = WorkerCreate(
-                        name=full_name,
-                        phone=phone,
-                        trade=trade or "Helper",
-                        experience_years=experience_years or 2,
-                        daily_rate=daily_rate,
-                        city=city or "Bengaluru",
-                        source="web"
-                    )
-                    created_w = WorkerService.create_worker(new_w)
-                    worker_id = created_w["id"]
 
             cursor.execute("""
                 INSERT INTO users (username, phone, password_hash, role, full_name, worker_id, city, trade, company_name)
@@ -120,6 +120,19 @@ class AuthService:
             cursor = conn.cursor()
             cursor.execute("INSERT INTO user_sessions (token, user_id) VALUES (?, ?)", (token, user_id))
         return token
+
+    @classmethod
+    def get_user_by_username_or_phone(cls, username_or_phone: str) -> Optional[Dict[str, Any]]:
+        ident = (username_or_phone or "").strip()
+        if not ident:
+            return None
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE username = ? OR phone = ?", (ident.lower(), ident))
+            row = cursor.fetchone()
+            if row:
+                return cls._format_user_dict(row)
+        return None
 
     @classmethod
     def get_user_by_token(cls, token: str) -> Optional[Dict[str, Any]]:

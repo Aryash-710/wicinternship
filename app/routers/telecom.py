@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/v1/telecom", tags=["IVR Voice Call Regional Micr
 
 
 @router.post("/ivr", response_model=IVRResponse)
-async def process_ivr(req: IVRRequest):
+def process_ivr(req: IVRRequest):
     """
     IVR Voice Call Webhook: processes DTMF and Voice Speech inputs and returns bilingual voice prompts
     in Kannada and Hindi for worker registration, job discovery, and fair wage calculation.
@@ -23,7 +23,7 @@ async def process_ivr(req: IVRRequest):
 
 
 @router.post("/ivr/twiml")
-async def process_ivr_twiml(
+def process_ivr_twiml(
     CallSid: str = Form(...),
     From: str = Form(""),
     Digits: Optional[str] = Form(None),
@@ -44,7 +44,7 @@ async def process_ivr_twiml(
 
 
 @router.post("/ivr/exotel")
-async def process_ivr_exotel(
+def process_ivr_exotel(
     CallSid: str = Form(...),
     From: str = Form(""),
     Digits: Optional[str] = Form(None),

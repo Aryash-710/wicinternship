@@ -72,13 +72,24 @@ let authToken = localStorage.getItem("kaayaka_auth_token") || null;
 let telecomSessionId = "CALL_" + Math.floor(Math.random() * 100000);
 let isIvrCallActive = false;
 let lastIvrAudioText = "";
+let lastIvrRomanizedText = "";
 let activeIvrLanguage = "bilingual";
 let currentIvrOptions = [];
+let availableSpeechVoices = [];
+
+function initSpeechVoices() {
+  if (!("speechSynthesis" in window)) return;
+  availableSpeechVoices = window.speechSynthesis.getVoices() || [];
+  window.speechSynthesis.onvoiceschanged = () => {
+    availableSpeechVoices = window.speechSynthesis.getVoices() || [];
+  };
+}
 
 // ============================================================================
 // Initialization
 // ============================================================================
 document.addEventListener("DOMContentLoaded", async () => {
+  initSpeechVoices();
   await initAuth();
   updatePhoneClock();
   setInterval(updatePhoneClock, 30000);
@@ -1052,7 +1063,8 @@ async function startIvrCall(phone) {
     }
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage);
+    lastIvrRomanizedText = data.prompt_romanized || "";
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
   } catch (e) {
     screen.innerText = "Call failed to connect.\nPlease verify backend service is running.";
     updateCallStatusBadge("Failed", false);
@@ -1088,7 +1100,8 @@ async function sendIvrDigits(digits) {
     }
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage);
+    lastIvrRomanizedText = data.prompt_romanized || "";
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;
@@ -1128,13 +1141,28 @@ function handleDialInputEnter() {
 }
 
 async function handlePhoneVoiceInput() {
-  // If call not initiated, start it automatically first!
+  const input = document.getElementById("phone-dial-input");
+  const typedVal = input ? input.value.trim() : "";
+
+  // If the user typed their response into the dial input bar, send it directly as voice input!
+  if (typedVal) {
+    input.value = "";
+    if (!isIvrCallActive) {
+      const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
+      await startIvrCall(phone);
+    }
+    sendIvrVoice(typedVal);
+    return;
+  }
+
+  // If call not initiated, clicking SPEAK starts the call
   if (!isIvrCallActive) {
     const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
     await startIvrCall(phone);
+    return;
   }
 
-  // Cancel any active synthetic speech to prevent mic echo feedback
+  // Cancel any active synthetic speech to prevent microphone echo feedback
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
@@ -1167,48 +1195,49 @@ async function handlePhoneVoiceInput() {
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
+  const currentScreenSnapshot = screen.innerText;
   if (voiceBtn) {
     voiceBtn.innerText = "🔴 LISTENING...";
     voiceBtn.style.background = "#dc2626";
   }
-  screen.innerText = "🎙️ Listening... Please speak your choice (Language, Trade, Experience, or City) now!";
+  screen.innerText = currentScreenSnapshot + "\n\n🎙️ [LISTENING... Speak your choice now!]";
 
-  recognition.onresult = function(event) {
+  function restoreVoiceBtn() {
     if (voiceBtn) {
       voiceBtn.innerText = "🎙️ SPEAK";
       voiceBtn.style.background = "#0284c7";
     }
+  }
+
+  recognition.onresult = function(event) {
+    restoreVoiceBtn();
     const transcript = event.results[0][0].transcript;
-    screen.innerText = `🎙️ Heard: "${transcript}"\nProcessing your voice input...`;
+    screen.innerText = `📞 ACTIVE CALL (🎙️ Heard: "${transcript}")\n\nProcessing your voice input...`;
     sendIvrVoice(transcript);
   };
 
   recognition.onerror = function(event) {
+    restoreVoiceBtn();
     console.warn("SpeechRec error event:", event);
-    if (voiceBtn) {
-      voiceBtn.innerText = "🎙️ SPEAK";
-      voiceBtn.style.background = "#0284c7";
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      showVoiceInputModal("Microphone permission was blocked. Please allow mic access or type your response below:");
+    } else if (event.error === "no-speech") {
+      screen.innerText = currentScreenSnapshot + "\n\n⚠️ No speech heard. Click 🎙️ SPEAK to try again, or type below.";
+    } else {
+      showVoiceInputModal(`Microphone notice (${event.error || 'notice'}). You can speak or select quick options below:`);
     }
-    // Automatically present the popup fallback modal so the user is never stuck
-    showVoiceInputModal(`Microphone capture notice (${event.error || 'no speech'}). You can speak or select quick options below:`);
   };
 
   recognition.onend = function() {
-    if (voiceBtn) {
-      voiceBtn.innerText = "🎙️ SPEAK";
-      voiceBtn.style.background = "#0284c7";
-    }
+    restoreVoiceBtn();
   };
 
   try {
     recognition.start();
   } catch (e) {
+    restoreVoiceBtn();
     console.warn("recognition.start failed:", e);
-    if (voiceBtn) {
-      voiceBtn.innerText = "🎙️ SPEAK";
-      voiceBtn.style.background = "#0284c7";
-    }
-    showVoiceInputModal("Microphone could not be activated. You can type or click a spoken response below:");
+    showVoiceInputModal("Microphone could not be started. You can type or click a spoken response below:");
   }
 }
 
@@ -1263,10 +1292,11 @@ function renderVoiceQuickPresets() {
   if (currentIvrOptions && currentIvrOptions.length > 0) {
     presets = currentIvrOptions.map(o => o.label);
   } else {
+    // When options are empty (e.g. for location where input is solely taken by voice!)
     if (activeIvrLanguage === "hindi") {
-      presets = ["1 (पंजीकरण)", "2 (काम खोजें)", "3 (दैनिक दर)", "इलेक्ट्रीशियन", "प्लंबर", "राजमिस्त्री", "बढ़ई", "पेंटर", "मजदूर", "वेल्डर", "2 वर्ष", "बेंगलुरु", "दिल्ली", "हासन"];
+      presets = ["बेंगलुरु", "मैसूर", "हुबली", "बेलगाम", "हासन", "दिल्ली", "लखनऊ", "पटना", "मुंबई", "इलेक्ट्रीशियन", "प्लंबर", "2 वर्ष"];
     } else if (activeIvrLanguage === "kannada") {
-      presets = ["1 (ನೋಂದಣಿ)", "2 (ಹೊಸ ಕೆಲಸಗಳು)", "3 (ದಿನಗೂಲಿ)", "ಎಲೆಕ್ಟ್ರಿಷಿಯನ್", "ಪ್ಲಂಬರ್", "ಮೇಸ್ತ್ರಿ", "ಬಡಗಿ", "ಪೇಂಟರ್", "ಕೂಲಿ ಕಾರ್ಮಿಕ", "ವೆಲ್ಡರ್", "2 ವರ್ಷ", "ಬೆಂಗಳೂರು", "ಮೈಸೂರು", "ಹಾಸನ"];
+      presets = ["ಬೆಂಗಳೂರು", "ಮೈಸೂರು", "ಹುಬ್ಬಳ್ಳಿ", "ಬೆಳಗಾವಿ", "ಹಾಸನ", "ಮಂಗಳೂರು", "ಶಿವಮೊಗ್ಗ", "ದೆಹಲಿ", "ಎಲೆಕ್ಟ್ರಿಷಿಯನ್", "ಪ್ಲಂಬರ್", "2 ವರ್ಷ"];
     } else {
       presets = ["ಕನ್ನಡ (Kannada - 1)", "हिन्दी (Hindi - 2)", "Electrician", "Plumber", "Mason", "Bengaluru", "Hassan"];
     }
@@ -1313,7 +1343,8 @@ async function sendIvrVoice(speechText) {
     }
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage);
+    lastIvrRomanizedText = data.prompt_romanized || "";
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;
@@ -1329,31 +1360,87 @@ async function sendIvrVoice(speechText) {
   }
 }
 
+function getBestSpeechVoice(lang) {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = (availableSpeechVoices && availableSpeechVoices.length > 0)
+    ? availableSpeechVoices
+    : window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+
+  if (lang === "hindi" || lang === "hi") {
+    const vMatch = voices.find(v => 
+      (v.lang && (v.lang.toLowerCase().startsWith("hi") || v.lang.toLowerCase().includes("hi-in"))) ||
+      (v.name && (v.name.toLowerCase().includes("hindi") || v.name.includes("हिन्दी") || v.name.toLowerCase().includes("kalpana") || v.name.toLowerCase().includes("hemant")))
+    );
+    if (vMatch) return vMatch;
+  }
+
+  if (lang === "kannada" || lang === "kn") {
+    const vMatch = voices.find(v => 
+      (v.lang && (v.lang.toLowerCase().startsWith("kn") || v.lang.toLowerCase().includes("kn-in"))) ||
+      (v.name && (v.name.toLowerCase().includes("kannada") || v.name.includes("ಕನ್ನಡ")))
+    );
+    if (vMatch) return vMatch;
+  }
+
+  return null;
+}
+
 // Speak prompt based on selected language (kannada, hindi, or bilingual initial greeting)
-function speakBilingualPrompt(promptText, lang) {
+// Automatically selects native Hindi/Kannada voice if present on client device,
+// OR cleanly falls back to phonetic romanized Hindi so that text is NEVER skipped and never reads only numbers!
+function speakBilingualPrompt(promptText, lang, romanText) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
 
   const chosenLang = lang || activeIvrLanguage || "bilingual";
+  const roman = romanText || lastIvrRomanizedText || "";
 
   if (chosenLang === "hindi") {
-    // Clean any prefix tag
     const cleanText = promptText.replace(/\[हिन्दी\]:\s*/g, "").replace(/\[ಕನ್ನಡ\]:\s*[\s\S]+?(?=\[हिन्दी\]:|$)/g, "").trim();
-    const utt = new SpeechSynthesisUtterance(cleanText || promptText);
-    utt.lang = "hi-IN";
-    utt.rate = 0.92;
-    utt.pitch = 1.0;
-    window.speechSynthesis.speak(utt);
+    const hiVoice = getBestSpeechVoice("hindi");
+
+    if (hiVoice) {
+      // Native Hindi Voice (e.g. Google हिन्दी or Microsoft Kalpana)
+      const spokenHindi = cleanText.replace(/(\d+):/g, "$1, ");
+      const utt = new SpeechSynthesisUtterance(spokenHindi);
+      utt.voice = hiVoice;
+      utt.lang = hiVoice.lang || "hi-IN";
+      utt.rate = 0.90;
+      utt.pitch = 1.0;
+      window.speechSynthesis.speak(utt);
+    } else {
+      // Fallback when no native Hindi TTS voice pack is installed on Windows/browser:
+      // Passing Devanagari to an English voice causes it to drop all Hindi words and read only numbers.
+      // Speaking the romanized phonetic text ensures EVERY Hindi word is clearly pronounced!
+      const spokenPhonetic = roman || "ShramSetu mein aapka swaagat hai. Shramik profile darj karne ke liye 1 dabayein. Naye kaam sunne ke liye 2 dabayein. Dainik mazdoori dar janne ke liye 3 dabayein.";
+      const utt = new SpeechSynthesisUtterance(spokenPhonetic);
+      utt.rate = 0.88;
+      utt.pitch = 1.0;
+      window.speechSynthesis.speak(utt);
+    }
     return;
   }
 
   if (chosenLang === "kannada") {
     const cleanText = promptText.replace(/\[ಕನ್ನಡ\]:\s*/g, "").replace(/\[हिन्दी\]:\s*[\s\S]+$/g, "").trim();
-    const utt = new SpeechSynthesisUtterance(cleanText || promptText);
-    utt.lang = "kn-IN";
-    utt.rate = 0.92;
-    utt.pitch = 1.0;
-    window.speechSynthesis.speak(utt);
+    const knVoice = getBestSpeechVoice("kannada");
+
+    if (knVoice) {
+      const spokenKn = cleanText.replace(/(\d+):/g, "$1, ");
+      const utt = new SpeechSynthesisUtterance(spokenKn);
+      utt.voice = knVoice;
+      utt.lang = knVoice.lang || "kn-IN";
+      utt.rate = 0.90;
+      utt.pitch = 1.0;
+      window.speechSynthesis.speak(utt);
+    } else {
+      const spokenPhonetic = roman || "KaayakaSetuvige swagatha. Karmika profile nondaisalu 1 otti. Hosa kelasagala mahiti kelalu 2 otti. Dinagooli dara thiliyaloo 3 otti.";
+      const utt = new SpeechSynthesisUtterance(spokenPhonetic);
+      utt.rate = 0.88;
+      utt.pitch = 1.0;
+      window.speechSynthesis.speak(utt);
+    }
     return;
   }
 
@@ -1365,18 +1452,25 @@ function speakBilingualPrompt(promptText, lang) {
     var knText = knMatch[1].trim();
     var hiText = hiMatch[1].trim();
 
-    var uttKn = new SpeechSynthesisUtterance(knText);
-    uttKn.lang = "kn-IN";
-    uttKn.rate = 0.92;
+    var knVoice = getBestSpeechVoice("kannada");
+    var hiVoice = getBestSpeechVoice("hindi");
+
+    var uttKnText = knVoice ? knText : "Namaskara, KaayakaSetuvige swagatha. Kannadakkagi ondu otti.";
+    var uttKn = new SpeechSynthesisUtterance(uttKnText);
+    if (knVoice) { uttKn.voice = knVoice; uttKn.lang = knVoice.lang; }
+    uttKn.rate = 0.90;
     uttKn.pitch = 1.0;
 
-    var uttHi = new SpeechSynthesisUtterance(hiText);
-    uttHi.lang = "hi-IN";
-    uttHi.rate = 0.92;
+    var uttHiText = hiVoice ? hiText : "Namaskar, ShramSetu mein aapka swaagat hai. Hindi ke liye do dabayein.";
+    var uttHi = new SpeechSynthesisUtterance(uttHiText);
+    if (hiVoice) { uttHi.voice = hiVoice; uttHi.lang = hiVoice.lang; }
+    uttHi.rate = 0.90;
     uttHi.pitch = 1.0;
 
+    uttKn.onend = function() {
+      window.speechSynthesis.speak(uttHi);
+    };
     window.speechSynthesis.speak(uttKn);
-    window.speechSynthesis.speak(uttHi);
   } else {
     speakVoice(promptText);
   }
@@ -1393,9 +1487,13 @@ function speakVoice(text) {
 
 function speakCurrentPrompt() {
   if (lastIvrAudioText) {
-    speakBilingualPrompt(lastIvrAudioText, activeIvrLanguage);
+    speakBilingualPrompt(lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
   } else {
-    speakBilingualPrompt("[ಕನ್ನಡ]: ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕನ್ನಡಕ್ಕಾಗಿ 1 ಒತ್ತಿ.\n[हिन्दी]: नमस्कार, श्रमसेतु में आपका स्वागत है। हिन्दी के लिए 2 दबाएं।", "bilingual");
+    speakBilingualPrompt(
+      "[ಕನ್ನಡ]: ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕನ್ನಡಕ್ಕಾಗಿ 1 ಒತ್ತಿ.\n[हिन्दी]: नमस्कार, श्रमसेतु में आपका स्वागत है। हिन्दी के लिए 2 दबाएं।",
+      "bilingual",
+      "[KN]: Namaskara, KaayakaSetuvige swagatha. Kannadakkagi 1 otti.\n[HI]: Namaskar, ShramSetu mein aapka swaagat hai. Hindi ke liye 2 dabayein."
+    );
   }
 }
 

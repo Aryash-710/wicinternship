@@ -194,6 +194,7 @@ class IVRResponse(BaseModel):
     twiml_xml: str
     prompt_text: str
     prompt_audio_text: str
+    prompt_romanized: Optional[str] = None
     language: str
     action: str  # 'gather' or 'hangup'
     options: List[Dict[str, str]]
