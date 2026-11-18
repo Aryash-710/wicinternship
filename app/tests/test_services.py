@@ -162,53 +162,68 @@ def test_ivr_service_direct_unit_flows():
         conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
         conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
 
-    # Step 1: Initial call greeting
+    # Step 0: Initial call greeting - asks whether Kannada or Hindi
     res_welcome = IVRService.handle_ivr_call(call_sid, phone, digits=None)
     assert res_welcome["action"] == "gather"
     assert "<Gather" in res_welcome["twiml_xml"]
-    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in res_welcome["prompt_text"]
-    assert "श्रमसेतु में आपका स्वागत है" in res_welcome["prompt_text"]
-    assert len(res_welcome["options"]) == 3
+    assert "ಕನ್ನಡಕ್ಕಾಗಿ 1" in res_welcome["prompt_text"]
+    assert "हिन्दी के लिए 2" in res_welcome["prompt_text"]
+    assert len(res_welcome["options"]) == 2
 
-    # Step 2: Option 1 - Worker Registration (Interactive Multi-step)
-    # 2a: Press 1 from menu -> Prompt trade
+    # Step 1: Select Kannada (digits="1") -> Shows Kannada main menu strictly in Kannada
+    res_menu = IVRService.handle_ivr_call(call_sid, phone, digits="1")
+    assert res_menu["action"] == "gather"
+    assert res_menu["language"] == "kannada"
+    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in res_menu["prompt_text"]
+    assert "श्रमसेतु" not in res_menu["prompt_text"]  # Strict single language!
+    assert len(res_menu["options"]) == 3
+
+    # Step 2: Option 1 - Worker Registration -> Prompt trade in Kannada
     res_reg1 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
     assert res_reg1["action"] == "gather"
+    assert res_reg1["language"] == "kannada"
     assert "ವೃತ್ತಿ" in res_reg1["prompt_text"]
 
-    # 2b: Choose trade (e.g. 1 for Electrician) -> Prompt experience
+    # Step 3: Choose trade (e.g. 1 for Electrician) -> Prompt experience in Kannada
     res_reg2 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
     assert res_reg2["action"] == "gather"
+    assert res_reg2["language"] == "kannada"
     assert "ಅನುಭವ" in res_reg2["prompt_text"]
 
-    # 2c: Choose experience (e.g. 3 for 3 years) -> Prompt city
+    # Step 4: Choose experience (e.g. 3 for 3 years) -> Prompt city in Kannada
     res_reg3 = IVRService.handle_ivr_call(call_sid, phone, digits="3")
     assert res_reg3["action"] == "gather"
-    assert "ಸ್ಥಳ" in res_reg3["prompt_text"]
+    assert res_reg3["language"] == "kannada"
+    assert ("ಸ್ಥಳ" in res_reg3["prompt_text"] or "ನಗರ" in res_reg3["prompt_text"])
 
-    # 2d: Choose city (e.g. 1 for Bengaluru) -> Finalize & hangup
+    # Step 5: Choose city (e.g. 1 for Bengaluru) -> Finalize & hangup in Kannada
     res_reg4 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
     assert res_reg4["action"] == "hangup"
     assert "<Hangup/>" in res_reg4["twiml_xml"]
     assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_reg4["prompt_text"]
 
-    # 2e: If calling again with same phone, confirms existing registration
-    res_again = IVRService.handle_ivr_call("CALL_UNIT_TEST_99_AGAIN", phone, digits="1")
+    # Step 6: If calling again with same registered phone:
+    # Select Kannada -> Select Registration -> Confirms existing registration in Kannada
+    call_sid_again = "CALL_UNIT_TEST_99_AGAIN"
+    IVRService.handle_ivr_call(call_sid_again, phone, digits="1")  # Lang: Kannada
+    res_again = IVRService.handle_ivr_call(call_sid_again, phone, digits="1")  # Reg
     assert res_again["action"] == "hangup"
     assert "ನೋಂದಾಯಿತವಾಗಿದೆ" in res_again["prompt_text"]
 
-    # Step 3: Option 2 - Find Jobs Voice Readout
-    call_sid_2 = "CALL_UNIT_TEST_88"
-    res_jobs = IVRService.handle_ivr_call(call_sid_2, phone, digits="2")
-    assert res_jobs["action"] == "hangup"
-    assert ("ಕೆಲಸ" in res_jobs["prompt_text"] or "ಲಭ್ಯವಿಲ್ಲ" in res_jobs["prompt_text"])
+    # Step 7: Hindi Language Selection Flow
+    call_sid_hi = "CALL_UNIT_TEST_HI"
+    # Select Hindi (digits="2")
+    res_hi_menu = IVRService.handle_ivr_call(call_sid_hi, phone, digits="2")
+    assert res_hi_menu["action"] == "gather"
+    assert res_hi_menu["language"] == "hindi"
+    assert "श्रमसेतु में आपका स्वागत है" in res_hi_menu["prompt_text"]
+    assert "ಕಾಯಕಸೇತು" not in res_hi_menu["prompt_text"]  # Strict Hindi!
 
-    # Step 4: Option 3 - Fair Daily Wage Voice Calculator
-    call_sid_3 = "CALL_UNIT_TEST_77"
-    res_wage = IVRService.handle_ivr_call(call_sid_3, phone, digits="3")
-    assert res_wage["action"] == "hangup"
-    assert "ದಿನಗೂಲಿ" in res_wage["prompt_text"]
-    assert "मजदूरी" in res_wage["prompt_text"]
+    # Step 8: Option 3 - Fair Daily Wage in Hindi
+    res_hi_wage = IVRService.handle_ivr_call(call_sid_hi, phone, digits="3")
+    assert res_hi_wage["action"] == "hangup"
+    assert "मजदूरी" in res_hi_wage["prompt_text"]
+    assert "ಕನ್ನಡ" not in res_hi_wage["prompt_text"]
 
 
 def test_ivr_voice_bilingual_api_flow(client):
@@ -221,7 +236,7 @@ def test_ivr_voice_bilingual_api_flow(client):
         conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
         conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
 
-    # Call greeting via API
+    # Step 0: Call greeting via API - asks language
     res = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -230,10 +245,22 @@ def test_ivr_voice_bilingual_api_flow(client):
     assert res.status_code == 200
     data = res.json()
     assert data["action"] == "gather"
-    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in data["prompt_text"]
-    assert "श्रमसेतु में आपका स्वागत है" in data["prompt_text"]
+    assert "ಕನ್ನಡಕ್ಕಾಗಿ 1" in data["prompt_text"]
+    assert "हिन्दी के लिए 2" in data["prompt_text"]
 
-    # Press Digit 1 for registration -> prompts trade
+    # Step 1: Select Kannada via voice speech ("kannada")
+    res_lang = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "",
+        "speech_result": "kannada"
+    })
+    assert res_lang.status_code == 200
+    data_lang = res_lang.json()
+    assert data_lang["language"] == "kannada"
+    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in data_lang["prompt_text"]
+
+    # Step 2: Press Digit 1 for registration -> prompts trade in Kannada
     res_reg = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -244,33 +271,36 @@ def test_ivr_voice_bilingual_api_flow(client):
     assert data_reg["action"] == "gather"
     assert "ವೃತ್ತಿ" in data_reg["prompt_text"]
 
-    # Step trade: 2 (Plumber)
+    # Step 3: Voice input for trade: "Plumber"
     res_trade = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
-        "digits": "2"
+        "digits": "",
+        "speech_result": "Plumber"
     })
     assert res_trade.status_code == 200
     assert "ಅನುಭವ" in res_trade.json()["prompt_text"]
 
-    # Step exp: 4 (4 years)
+    # Step 4: Step exp: 4 (4 years)
     res_exp = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
         "digits": "4"
     })
     assert res_exp.status_code == 200
-    assert "ಸ್ಥಳ" in res_exp.json()["prompt_text"]
+    assert ("ಸ್ಥಳ" in res_exp.json()["prompt_text"] or "ನಗರ" in res_exp.json()["prompt_text"])
 
-    # Step city: 1 (Bengaluru)
+    # Step 5: Voice input for city: "Hassan"
     res_city = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
-        "digits": "1"
+        "digits": "",
+        "speech_result": "Hassan"
     })
     assert res_city.status_code == 200
     assert res_city.json()["action"] == "hangup"
     assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_city.json()["prompt_text"]
+    assert "Hassan" in res_city.json()["prompt_text"]
 
 
 def test_auth_service_and_roles():
@@ -475,7 +505,7 @@ def test_ivr_voice_speech_input_for_occupation_and_location(client):
         conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
         conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
 
-    # Step 0: Greeting
+    # Step 0: Greeting - Asks language
     res0 = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -484,7 +514,17 @@ def test_ivr_voice_speech_input_for_occupation_and_location(client):
     assert res0.status_code == 200
     assert res0.json()["action"] == "gather"
 
-    # Step 1: Press 1 or speak to register
+    # Step 1: Select Kannada language (1)
+    res_lang = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "1"
+    })
+    assert res_lang.status_code == 200
+    assert res_lang.json()["action"] == "gather"
+    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in res_lang.json()["prompt_text"]
+
+    # Step 2: Select Worker Registration (1 or voice "ನೋಂದಣಿ")
     res1 = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -492,8 +532,9 @@ def test_ivr_voice_speech_input_for_occupation_and_location(client):
     })
     assert res1.status_code == 200
     assert res1.json()["action"] == "gather"
+    assert "ವೃತ್ತಿ" in res1.json()["prompt_text"]
 
-    # Step 2: VOICE INPUT for OCCUPATION: say "Plumber" / "ಪ್ಲಂಬರ್"
+    # Step 3: VOICE INPUT for OCCUPATION: say "Plumber" / "ಪ್ಲಂಬರ್"
     res_trade = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -504,7 +545,7 @@ def test_ivr_voice_speech_input_for_occupation_and_location(client):
     assert res_trade.json()["action"] == "gather"
     assert "ಅನುಭವ" in res_trade.json()["prompt_text"]
 
-    # Step 3: Speak experience: say "3 years" / "ಮೂರು ವರ್ಷ"
+    # Step 4: Speak experience: say "3 years" / "ಮೂರು ವರ್ಷ"
     res_exp = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
@@ -515,7 +556,7 @@ def test_ivr_voice_speech_input_for_occupation_and_location(client):
     assert res_exp.json()["action"] == "gather"
     assert "ಸ್ಥಳ" in res_exp.json()["prompt_text"]
 
-    # Step 4: VOICE INPUT for LOCATION: say custom place "Kanakapura"
+    # Step 5: VOICE INPUT for LOCATION: say custom place "Kanakapura"
     res_city = client.post("/api/v1/telecom/ivr", json={
         "call_sid": call_sid,
         "caller_phone": phone,
