@@ -98,3 +98,60 @@ class JobService:
             cursor.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?", values)
             cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
             return cursor.fetchone()
+
+    @staticmethod
+    def delete_job(job_id: int) -> bool:
+        """
+        Delete a job posting from the database (e.g. after hiring or fulfilling the requirement).
+        """
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+            return cursor.rowcount > 0
+
+    @staticmethod
+    def hire_worker_for_job(job_id: int, worker_id: int, remove_job: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Hire a worker for a job:
+        1. Marks worker availability as 'busy' (showing worker is busy in work).
+        2. Increments worker's jobs_completed count.
+        3. If remove_job is True, removes the job vacancy from active listings.
+        """
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+            job = cursor.fetchone()
+            if not job:
+                return None
+
+            cursor.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
+            worker = cursor.fetchone()
+            if not worker:
+                return None
+
+            # Mark worker as busy in work and increment jobs completed
+            cursor.execute("""
+                UPDATE workers
+                SET availability = 'busy', jobs_completed = jobs_completed + 1
+                WHERE id = ?
+            """, (worker_id,))
+
+            job_removed = False
+            if remove_job:
+                cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+                job_removed = True
+            else:
+                cursor.execute("UPDATE jobs SET status = 'completed' WHERE id = ?", (job_id,))
+
+            cursor.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
+            updated_worker = cursor.fetchone()
+
+            return {
+                "status": "success",
+                "message": f"Worker '{worker['name']}' has been hired and is now marked as Busy in Work.",
+                "worker": updated_worker,
+                "availability": updated_worker["availability"],
+                "worker_id": worker_id,
+                "job": job,
+                "job_removed": job_removed
+            }

@@ -66,12 +66,14 @@ class FeedService:
         employer_lon: Optional[float] = None,
         city: Optional[str] = None,
         trade: Optional[str] = None,
+        availability: Optional[str] = None,
         max_daily_rate: Optional[float] = None,
         max_distance_km: Optional[float] = None,
         limit: int = 30
     ) -> List[Dict[str, Any]]:
         """
         Curated workers feed for employers seeking talent.
+        Returns both available and busy workers with real-time status.
         """
         if (employer_lat is None or employer_lon is None) and city:
             lat, lon, _ = LocationService.resolve_city_coords(city)
@@ -81,7 +83,7 @@ class FeedService:
         workers = WorkerService.list_workers(
             trade=trade,
             city=city if not (employer_lat and employer_lon) else None,
-            availability="available",
+            availability=availability,
             max_daily_rate=max_daily_rate,
             limit=100
         )
@@ -101,11 +103,16 @@ class FeedService:
 
         if employer_lat is not None and employer_lon is not None:
             feed_items.sort(key=lambda x: (
+                0 if x.get("availability") == "available" else 1,
                 x["distance_km"] if x["distance_km"] is not None else 9999,
                 -x["rating"]
             ))
         else:
-            feed_items.sort(key=lambda x: (-x["rating"], -x["jobs_completed"]))
+            feed_items.sort(key=lambda x: (
+                0 if x.get("availability") == "available" else 1,
+                -x["rating"],
+                -x["jobs_completed"]
+            ))
 
         return feed_items[:limit]
 

@@ -187,6 +187,7 @@ class IVRRequest(BaseModel):
     caller_phone: str = Field(default="9845011223", examples=["9845011223"])
     digits: Optional[str] = Field(default="", examples=["1"])
     speech_result: Optional[str] = Field(default=None, examples=["Plumber"])
+    language: Optional[str] = Field(default=None, examples=["hindi"])
 
 
 class IVRResponse(BaseModel):

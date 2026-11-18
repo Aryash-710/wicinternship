@@ -35,6 +35,7 @@ def get_worker_feed(
     lon: Optional[float] = Query(None, description="Employer longitude"),
     city: Optional[str] = Query(None, description="Employer city name"),
     trade: Optional[str] = Query(None, description="Trade filter"),
+    availability: Optional[str] = Query(None, description="Filter: available, busy"),
     max_daily_rate: Optional[float] = Query(None, description="Max daily rate"),
     max_distance_km: Optional[float] = Query(None, description="Filter within km radius"),
     limit: int = Query(30, ge=1, le=100)
@@ -47,6 +48,7 @@ def get_worker_feed(
         employer_lon=lon,
         city=city,
         trade=trade,
+        availability=availability,
         max_daily_rate=max_daily_rate,
         max_distance_km=max_distance_km,
         limit=limit

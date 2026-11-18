@@ -62,3 +62,20 @@ def update_worker(worker_id: int, updates: WorkerUpdate):
     if not updated:
         raise HTTPException(status_code=404, detail="Worker profile not found")
     return updated
+
+
+@router.post("/{worker_id}/status", response_model=WorkerResponse)
+def set_worker_status(
+    worker_id: int,
+    availability: str = Query(..., description="'available', 'busy', or 'on_call'")
+):
+    """
+    Directly update a worker's status (e.g. mark as busy in work or available again).
+    """
+    if availability not in ("available", "busy", "on_call"):
+        raise HTTPException(status_code=400, detail="Invalid availability. Must be 'available', 'busy', or 'on_call'.")
+
+    updated = WorkerService.set_worker_availability(worker_id, availability)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+    return updated

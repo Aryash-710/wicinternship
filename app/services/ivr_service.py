@@ -278,12 +278,14 @@ class IVRService:
         phone: str,
         digits: Optional[str] = None,
         speech_result: Optional[str] = None,
-        action_url: str = "/api/v1/telecom/ivr/twiml"
+        action_url: str = "/api/v1/telecom/ivr/twiml",
+        default_language: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Main IVR State Machine.
         Step 0: Asks user to select language: 1 for Kannada, 2 for Hindi.
         Subsequent Steps: Proceeds 100% in the chosen language.
+        If default_language == 'hindi' (used by the Web Simulator), proceeds directly and purely in Hindi.
         """
         digits = (digits if isinstance(digits, str) else "").strip()
         speech = (speech_result if isinstance(speech_result, str) else "").strip()
@@ -293,6 +295,39 @@ class IVRService:
         step = session.get("current_step", "lang_select")
         lang = session.get("language", "pending")
         draft = session.get("draft", {})
+
+        # Web Simulator Pure Hindi Mode: Skip language prompt and start directly in Hindi
+        if default_language == "hindi" and lang != "hindi":
+            lang = "hindi"
+            step = "menu"
+            cls.update_call_session(call_sid, "menu", "hindi", draft)
+            if not digits and not speech:
+                menu_prompt = (
+                    "श्रमसेतु में आपका स्वागत है।\n"
+                    "1: श्रमिक प्रोफ़ाइल दर्ज करने के लिए 1 दबाएं।\n"
+                    "2: आज के नए काम सुनने के लिए 2 दबाएं।\n"
+                    "3: उचित दैनिक मजदूरी दर जानने के लिए 3 दबाएं।"
+                )
+                menu_roman = (
+                    "ShramSetu mein aapka swaagat hai. "
+                    "Shramik profile darj karne ke liye 1 dabayein. "
+                    "Naye kaam sunne ke liye 2 dabayein. "
+                    "Uchit dainik mazdoori dar janne ke liye 3 dabayein."
+                )
+                options = [
+                    {"digit": "1", "label": "श्रमिक पंजीकरण (Register Profile)"},
+                    {"digit": "2", "label": "नए काम खोजें (Find Jobs)"},
+                    {"digit": "3", "label": "दैनिक मजदूरी दर जांचें (Check Daily Wage)"}
+                ]
+                return cls._build_response(
+                    call_sid=call_sid,
+                    prompt=menu_prompt,
+                    language="hindi",
+                    action="gather",
+                    options=options,
+                    action_url=action_url,
+                    prompt_romanized=menu_roman
+                )
 
         # -------------------------------------------------------------
         # Step 0: Initial Call Connection -> Ask for Language Selection

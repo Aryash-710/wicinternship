@@ -58,3 +58,40 @@ def update_job(job_id: int, updates: JobUpdate):
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
     return job
+
+
+@router.delete("/{job_id}", status_code=200)
+def delete_job(job_id: int):
+    """
+    Employers can remove/delete a job posting after hiring a worker or fulfilling work.
+    """
+    job = JobService.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    success = JobService.delete_job(job_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Could not delete job posting")
+    return {
+        "status": "success",
+        "message": f"Work vacancy '{job['title']}' removed successfully.",
+        "job_id": job_id
+    }
+
+
+@router.post("/{job_id}/hire/{worker_id}", status_code=200)
+def hire_worker_for_job(
+    job_id: int,
+    worker_id: int,
+    remove_job: bool = Query(True, description="Whether to remove the job listing after hiring")
+):
+    """
+    Employer hires a worker for a job:
+    1. Sets worker availability to 'busy' (showing worker is busy in work).
+    2. Increments worker's jobs_completed count.
+    3. If remove_job is True, deletes/removes the job listing from the marketplace.
+    """
+    result = JobService.hire_worker_for_job(job_id=job_id, worker_id=worker_id, remove_job=remove_job)
+    if not result:
+        raise HTTPException(status_code=404, detail="Job or Worker not found")
+    return result

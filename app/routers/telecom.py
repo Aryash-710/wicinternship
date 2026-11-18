@@ -60,15 +60,17 @@ def _clean_str(val: Optional[object]) -> Optional[str]:
 @router.post("/ivr", response_model=IVRResponse)
 def process_ivr(req: IVRRequest):
     """
-    IVR Voice Call Webhook: processes DTMF and Voice Speech inputs and returns bilingual voice prompts
-    in Kannada and Hindi for worker registration, job discovery, and fair wage calculation.
+    IVR Voice Call Webhook: processes DTMF and Voice Speech inputs.
+    When req.language == 'hindi' (used by the Web Simulator), converses purely in Hindi.
+    When req.language is None (used by automated bilingual testing), proceeds bilingually.
     """
     res = IVRService.handle_ivr_call(
         call_sid=req.call_sid,
         phone=req.caller_phone,
         digits=req.digits,
         speech_result=req.speech_result,
-        action_url="/api/v1/telecom/ivr/twiml"
+        action_url="/api/v1/telecom/ivr/twiml",
+        default_language=req.language
     )
     return IVRResponse(**res)
 

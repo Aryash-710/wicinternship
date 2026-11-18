@@ -118,3 +118,16 @@ class WorkerService:
             cursor.execute(f"UPDATE workers SET {', '.join(fields)} WHERE id = ?", values)
             cursor.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
             return cursor.fetchone()
+
+    @staticmethod
+    def set_worker_availability(worker_id: int, availability: str) -> Optional[Dict[str, Any]]:
+        """
+        Directly update worker availability between 'available' and 'busy'.
+        """
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE workers SET availability = ? WHERE id = ?", (availability.strip(), worker_id))
+            if cursor.rowcount == 0:
+                return None
+            cursor.execute("SELECT * FROM workers WHERE id = ?", (worker_id,))
+            return cursor.fetchone()

@@ -573,4 +573,106 @@ def test_twilio_kannada_voice_and_absolute_action_url():
         os.environ.pop("TWILIO_WEBHOOK_URL", None)
 
 
+def test_job_removal_and_worker_busy_flow():
+    from app.services.worker_service import WorkerService
+    from app.services.job_service import JobService
+    from app.models.schemas import WorkerCreate, JobCreate
+    from app.routers.jobs import hire_worker_for_job, delete_job
+    from app.routers.workers import set_worker_status
+    from app.database import get_db
+
+    phone = "9845099881"
+    emp_phone = "9845099882"
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM jobs WHERE employer_phone = ?", (emp_phone,))
+
+    # Create worker
+    w = WorkerService.create_worker(WorkerCreate(
+        name="Test Plumber",
+        phone=phone,
+        trade="Plumber",
+        experience_years=4,
+        city="Bengaluru",
+        availability="available"
+    ))
+    assert w["availability"] == "available"
+    initial_completed = w.get("jobs_completed", 0)
+
+    # Create job
+    j = JobService.create_job(JobCreate(
+        title="Kitchen Pipeline Repair",
+        trade="Plumber",
+        employer_name="Anand Employer",
+        employer_phone=emp_phone,
+        city="Bengaluru",
+        wage_offered=850.0
+    ))
+    assert j is not None
+    job_id = j["id"]
+
+    # 1. Employer hires the worker for the job and removes the job listing
+    hire_res = hire_worker_for_job(job_id=job_id, worker_id=w["id"], remove_job=True)
+    assert hire_res["status"] == "success"
+    assert hire_res["availability"] == "busy"
+    assert hire_res["job_removed"] is True
+
+    # Verify worker is now busy in work
+    updated_w = WorkerService.get_worker(w["id"])
+    assert updated_w["availability"] == "busy"
+    assert updated_w["jobs_completed"] == initial_completed + 1
+
+    # Verify job was removed from active listings
+    assert JobService.get_job(job_id) is None
+
+    # 2. Worker completes work and updates status back to available
+    status_res = set_worker_status(worker_id=w["id"], availability="available")
+    assert status_res["availability"] == "available"
+
+    # 3. Test standalone delete_job
+    j2 = JobService.create_job(JobCreate(
+        title="Bathroom Tile Work",
+        trade="Mason",
+        employer_name="Anand Employer",
+        employer_phone=emp_phone,
+        city="Bengaluru",
+        wage_offered=900.0
+    ))
+    del_res = delete_job(j2["id"])
+    assert del_res["status"] == "success"
+    assert JobService.get_job(j2["id"]) is None
+
+
+def test_ivr_web_simulator_pure_hindi_flow():
+    from app.routers.telecom import process_ivr
+    from app.models.schemas import IVRRequest
+    from app.database import get_db
+
+    call_sid = "SIMULATOR_HINDI_SESSION_1"
+    phone = "9845099883"
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
+
+    # Step 0: Simulator connects with language="hindi" -> Directly starts in Hindi!
+    res0 = process_ivr(IVRRequest(call_sid=call_sid, caller_phone=phone, digits="", language="hindi"))
+    assert res0.action == "gather"
+    assert res0.language == "hindi"
+    assert "श्रमसेतु में आपका स्वागत है" in res0.prompt_text
+    # Must NOT contain any Kannada text or options in the web simulator!
+    assert "ಕನ್ನಡ" not in res0.prompt_text
+    assert "ಕಾಯಕಸೇತು" not in res0.prompt_text
+    assert any("पंजीकरण" in o["label"] for o in res0.options)
+
+    # Step 1: Simulator user presses 1 for Worker Registration -> Continues purely in Hindi!
+    res1 = process_ivr(IVRRequest(call_sid=call_sid, caller_phone=phone, digits="1", language="hindi"))
+    assert res1.action == "gather"
+    assert res1.language == "hindi"
+    assert "श्रमिक पंजीकरण में आपका स्वागत है" in res1.prompt_text
+    assert "ಕನ್ನಡ" not in res1.prompt_text
+
+
+
 

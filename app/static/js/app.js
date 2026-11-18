@@ -73,7 +73,7 @@ let telecomSessionId = "CALL_" + Math.floor(Math.random() * 100000);
 let isIvrCallActive = false;
 let lastIvrAudioText = "";
 let lastIvrRomanizedText = "";
-let activeIvrLanguage = "bilingual";
+let activeIvrLanguage = "hindi"; // Web simulator converses in Hindi
 let currentIvrOptions = [];
 let availableSpeechVoices = [];
 
@@ -525,9 +525,14 @@ async function loadJobFeed() {
             <span>🏢 Posted by: ${job.employer_name}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('job', ${job.id}, '${job.title.replace(/'/g, "\\'")}')">
-          💬 Message Employer
-        </button>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
+          <button class="btn btn-primary" onclick="initiateChat('job', ${job.id}, '${job.title.replace(/'/g, "\\'")}')">
+            💬 Message Employer
+          </button>
+          <button class="btn btn-outline" style="color:#dc2626; border-color:#dc2626;" title="Remove this work vacancy after hiring" onclick="removeJobPosting(${job.id}, '${job.title.replace(/'/g, "\\'")}')">
+            🗑️ Remove Work (ಕೆಲಸ ತೆಗೆದುಹಾಕಿ)
+          </button>
+        </div>
       `;
       grid.appendChild(card);
     });
@@ -562,10 +567,16 @@ async function loadWorkerFeed() {
     workers.forEach(w => {
       const card = document.createElement("div");
       card.className = "card";
+      const isBusy = (w.availability === 'busy');
+      const statusBadge = isBusy
+        ? '<span class="badge" style="background:#dc2626; color:white; font-weight:700;">🔴 Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ)</span>'
+        : '<span class="badge" style="background:#16a34a; color:white; font-weight:700;">🟢 Available for Hire (ಲಭ್ಯ)</span>';
+
       card.innerHTML = `
         <div>
           <div class="card-header">
             <span class="badge badge-trade">${w.trade}</span>
+            ${statusBadge}
             <span class="badge badge-score">⭐ ${w.rating} / 5.0</span>
           </div>
           <h3 class="card-title">${w.name}</h3>
@@ -577,9 +588,17 @@ async function loadWorkerFeed() {
             <span>🗣️ Language: ${w.language_pref.toUpperCase()}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
-          💬 Message Worker
-        </button>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
+          <button class="btn btn-primary" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
+            💬 Message Worker
+          </button>
+          <button class="btn btn-success" style="background:#16a34a; border-color:#16a34a; color:white;" onclick="openHireModal(${w.id}, '${w.name.replace(/'/g, "\\'")}', '${w.trade.replace(/'/g, "\\'")}')">
+            💼 Hire Worker (ಕೆಲಸಕ್ಕೆ ನೇಮಿಸಿ)
+          </button>
+          <button class="btn btn-outline" style="font-size:0.8rem; padding:0.35rem 0.6rem;" onclick="toggleWorkerStatus(${w.id}, '${isBusy ? 'available' : 'busy'}')">
+            ${isBusy ? '🟢 Mark Available' : '🔴 Mark Busy'}
+          </button>
+        </div>
       `;
       grid.appendChild(card);
     });
@@ -735,10 +754,16 @@ async function runMatching() {
         `;
       } else {
         const w = m.worker;
+        const isBusy = (w.availability === 'busy');
+        const availBadge = isBusy
+          ? '<span class="badge" style="background:#dc2626; color:white; font-weight:700;">🔴 Busy in Work</span>'
+          : '<span class="badge" style="background:#16a34a; color:white; font-weight:700;">🟢 Available</span>';
+
         card.innerHTML = `
           <div>
             <div class="card-header">
               <span class="badge badge-trade">${w.trade}</span>
+              ${availBadge}
               <span class="badge badge-score">Match: ${score}%</span>
             </div>
             <h3 class="card-title">${w.name}</h3>
@@ -755,9 +780,14 @@ async function runMatching() {
               <span>ℹ️ Why: ${b.explanation}</span>
             </div>
           </div>
-          <button class="btn btn-primary" style="margin-top:1rem;" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
-            💬 Message Worker
-          </button>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
+            <button class="btn btn-primary" onclick="initiateChat('worker', ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
+              💬 Message Worker
+            </button>
+            <button class="btn btn-success" style="background:#16a34a; border-color:#16a34a; color:white;" onclick="hireMatchedWorker(${targetId}, ${w.id}, '${w.name.replace(/'/g, "\\'")}')">
+              💼 Hire & Remove Work (ಕೆಲಸಕ್ಕೆ ನೇಮಿಸಿ)
+            </button>
+          </div>
         `;
       }
       grid.appendChild(card);
@@ -1023,7 +1053,7 @@ function handlePhoneEndBtn() {
   fetch(`/api/v1/telecom/ivr/reset?call_sid=${telecomSessionId}`, { method: "POST" });
   telecomSessionId = "CALL_" + Math.floor(Math.random() * 100000);
 
-  screen.innerText = "Call Terminated.\n\nThank you for calling KaayakaSetu (1800-KAYAKA).\nPress CALL to start a new voice session.";
+  screen.innerText = "Call Terminated.\n\nश्रमसेतु हेल्पलाइन में कॉल करने के लिए धन्यवाद (1800-KAYAKA).\nPress CALL to start a new Hindi voice session.";
   if (input) input.value = "";
   if (xmlDisplay) {
     xmlDisplay.innerText = "<!-- Call ended. TwiML session closed. -->";
@@ -1033,7 +1063,7 @@ function handlePhoneEndBtn() {
 async function startIvrCall(phone) {
   const screen = document.getElementById("screen-text");
   const xmlDisplay = document.getElementById("twiml-display");
-  screen.innerText = "📞 Dialing 1800-KAYAKA...\nConnecting to Voice Gateway...";
+  screen.innerText = "📞 श्रमसेतु हेल्पलाइन से जुड़ रहे हैं...\nConnecting to Hindi Voice Gateway...";
   updateCallStatusBadge("Connecting...", false);
 
   try {
@@ -1043,16 +1073,17 @@ async function startIvrCall(phone) {
       body: JSON.stringify({
         call_sid: telecomSessionId,
         caller_phone: phone,
-        digits: ""
+        digits: "",
+        language: "hindi"
       })
     });
     const data = await res.json();
     isIvrCallActive = true;
-    activeIvrLanguage = data.language || "bilingual";
+    activeIvrLanguage = "hindi"; // Web simulator converses ONLY in Hindi
     currentIvrOptions = data.options || [];
     updateCallStatusBadge("Live Call", true);
 
-    let screenMsg = `📞 ACTIVE CALL (1800-KAYAKA)\n\n${data.prompt_text}`;
+    let screenMsg = `📞 ACTIVE CALL (श्रमसेतु हेल्पलाइन)\n\n${data.prompt_text}`;
     if (data.options && data.options.length > 0 && !data.prompt_text.includes("1:")) {
       screenMsg += "\n\nOptions:\n" + data.options.map(o => `[${o.digit}] ${o.label}`).join("\n");
     }
@@ -1064,7 +1095,7 @@ async function startIvrCall(phone) {
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
   } catch (e) {
     screen.innerText = "Call failed to connect.\nPlease verify backend service is running.";
     updateCallStatusBadge("Failed", false);
@@ -1083,11 +1114,12 @@ async function sendIvrDigits(digits) {
       body: JSON.stringify({
         call_sid: telecomSessionId,
         caller_phone: phone,
-        digits: digits
+        digits: digits,
+        language: "hindi"
       })
     });
     const data = await res.json();
-    activeIvrLanguage = data.language || activeIvrLanguage;
+    activeIvrLanguage = "hindi";
     currentIvrOptions = data.options || [];
 
     let screenMsg = `📞 ACTIVE CALL (DTMF: ${digits})\n\n${data.prompt_text}`;
@@ -1101,7 +1133,7 @@ async function sendIvrDigits(digits) {
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;
@@ -1185,13 +1217,8 @@ async function handlePhoneVoiceInput() {
     return;
   }
 
-  if (activeIvrLanguage === "hindi") {
-    recognition.lang = "hi-IN";
-  } else if (activeIvrLanguage === "kannada") {
-    recognition.lang = "kn-IN";
-  } else {
-    recognition.lang = "kn-IN";
-  }
+  // Web Simulator converses purely in Hindi
+  recognition.lang = "hi-IN";
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
@@ -1292,14 +1319,8 @@ function renderVoiceQuickPresets() {
   if (currentIvrOptions && currentIvrOptions.length > 0) {
     presets = currentIvrOptions.map(o => o.label);
   } else {
-    // When options are empty (e.g. for location where input is solely taken by voice!)
-    if (activeIvrLanguage === "hindi") {
-      presets = ["बेंगलुरु", "मैसूर", "हुबली", "बेलगाम", "हासन", "दिल्ली", "लखनऊ", "पटना", "मुंबई", "इलेक्ट्रीशियन", "प्लंबर", "2 वर्ष"];
-    } else if (activeIvrLanguage === "kannada") {
-      presets = ["ಬೆಂಗಳೂರು", "ಮೈಸೂರು", "ಹುಬ್ಬಳ್ಳಿ", "ಬೆಳಗಾವಿ", "ಹಾಸನ", "ಮಂಗಳೂರು", "ಶಿವಮೊಗ್ಗ", "ದೆಹಲಿ", "ಎಲೆಕ್ಟ್ರಿಷಿಯನ್", "ಪ್ಲಂಬರ್", "2 ವರ್ಷ"];
-    } else {
-      presets = ["ಕನ್ನಡ (Kannada - 1)", "हिन्दी (Hindi - 2)", "Electrician", "Plumber", "Mason", "Bengaluru", "Hassan"];
-    }
+    // Pure Hindi presets for web simulator
+    presets = ["इलेक्ट्रीशियन", "प्लंबर", "राजमिस्त्री", "बढ़ई", "पेंटर", "मजदूर", "वेल्डर", "बेंगलुरु", "दिल्ली", "लखनऊ", "मुंबई", "पटना", "मैसूर", "3 वर्ष", "2 वर्ष", "5 वर्ष"];
   }
 
   presets.forEach(text => {
@@ -1326,11 +1347,12 @@ async function sendIvrVoice(speechText) {
         call_sid: telecomSessionId,
         caller_phone: phone,
         digits: "",
-        speech_result: speechText
+        speech_result: speechText,
+        language: "hindi"
       })
     });
     const data = await res.json();
-    activeIvrLanguage = data.language || activeIvrLanguage;
+    activeIvrLanguage = "hindi";
     currentIvrOptions = data.options || [];
 
     let screenMsg = `📞 ACTIVE CALL (Voice Input: "${speechText}")\n\n${data.prompt_text}`;
@@ -1344,7 +1366,7 @@ async function sendIvrVoice(speechText) {
 
     lastIvrAudioText = data.prompt_audio_text || data.prompt_text;
     lastIvrRomanizedText = data.prompt_romanized || "";
-    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, activeIvrLanguage, lastIvrRomanizedText);
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText, "hindi", lastIvrRomanizedText);
 
     if (data.action === "hangup") {
       isIvrCallActive = false;
@@ -2013,4 +2035,130 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// ============================================================================
+// Worker Hiring & Work Removal Management
+// ============================================================================
+let activeHireTarget = null;
+
+async function openHireModal(workerId, workerName, workerTrade) {
+  activeHireTarget = { workerId, workerName, workerTrade };
+  const modal = document.getElementById("hire-modal");
+  const summary = document.getElementById("hire-worker-summary");
+  const jobSelect = document.getElementById("hire-job-select");
+  if (!modal || !summary || !jobSelect) return;
+
+  summary.innerHTML = `
+    <strong>Worker:</strong> ${workerName} (${workerTrade})<br>
+    <span style="color:#16a34a; font-weight:600;">Status will be updated to: 🔴 Busy in Work (काम में व्यस्त / ಕೆಲಸದಲ್ಲಿ ನಿರತ)</span>
+  `;
+
+  jobSelect.innerHTML = "<option value=''>Loading work vacancies...</option>";
+  modal.classList.add("active");
+
+  try {
+    const res = await fetch("/api/v1/jobs/?status=open&limit=100");
+    const jobs = await res.json();
+    jobSelect.innerHTML = "";
+    if (jobs && jobs.length > 0) {
+      jobs.forEach(j => {
+        jobSelect.innerHTML += `<option value="${j.id}">[ID: ${j.id}] ${j.title} - ${j.city} (Offered: ₹${j.wage_offered})</option>`;
+      });
+    } else {
+      jobSelect.innerHTML = "<option value=''>Direct Hire (No open work listings)</option>";
+    }
+  } catch (err) {
+    jobSelect.innerHTML = "<option value=''>Direct Hire</option>";
+  }
+}
+
+function closeHireModal() {
+  const modal = document.getElementById("hire-modal");
+  if (modal) modal.classList.remove("active");
+  activeHireTarget = null;
+}
+
+async function confirmHireWorker() {
+  if (!activeHireTarget) return;
+  const jobSelect = document.getElementById("hire-job-select");
+  const jobId = jobSelect ? jobSelect.value : null;
+  const removeJobCheckbox = document.getElementById("hire-remove-job-checkbox");
+  const removeJob = removeJobCheckbox ? removeJobCheckbox.checked : true;
+
+  try {
+    if (jobId) {
+      const res = await fetch(`/api/v1/jobs/${jobId}/hire/${activeHireTarget.workerId}?remove_job=${removeJob}`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      alert(`🎉 Success!\n\n${data.message || 'Worker hired successfully!'}\nWorker is now marked as 🔴 Busy in Work.\n${data.job_removed ? 'The work vacancy has been removed from marketplace.' : ''}`);
+    } else {
+      // Direct status toggle to busy
+      const res = await fetch(`/api/v1/workers/${activeHireTarget.workerId}/status?availability=busy`, {
+        method: "POST"
+      });
+      alert(`🎉 Worker '${activeHireTarget.workerName}' has been hired and marked as 🔴 Busy in Work!`);
+    }
+
+    closeHireModal();
+    loadWorkerFeed();
+    loadJobFeed();
+    loadInsights();
+  } catch (err) {
+    alert("Error completing hire action. Please try again.");
+  }
+}
+
+async function hireMatchedWorker(jobId, workerId, workerName) {
+  if (!confirm(`Hire worker '${workerName}' for this job opening?\n\nThis will:\n1. Mark the worker as 🔴 Busy in Work.\n2. Remove this work vacancy from the active marketplace.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/jobs/${jobId}/hire/${workerId}?remove_job=true`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    alert(`🎉 Worker '${workerName}' hired!\n\nWorker status: 🔴 Busy in Work.\nThe work vacancy has been removed from the marketplace.`);
+    runMatching();
+    loadJobFeed();
+    loadWorkerFeed();
+    loadInsights();
+  } catch (err) {
+    alert("Error hiring worker.");
+  }
+}
+
+async function removeJobPosting(jobId, jobTitle) {
+  if (!confirm(`Are you sure you want to remove the work vacancy '${jobTitle}'?\n\n(Use this after you have hired a worker or the requirement is completed).`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/jobs/${jobId}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    alert(`🗑️ Work vacancy '${jobTitle}' has been removed successfully.`);
+    loadJobFeed();
+    loadInsights();
+    populateMatchingDropdowns();
+  } catch (err) {
+    alert("Error removing work vacancy.");
+  }
+}
+
+async function toggleWorkerStatus(workerId, newStatus) {
+  try {
+    const res = await fetch(`/api/v1/workers/${workerId}/status?availability=${newStatus}`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    alert(`Worker status updated to: ${newStatus === 'busy' ? '🔴 Busy in Work (ಕೆಲಸದಲ್ಲಿ ನಿರತ / काम में व्यस्त)' : '🟢 Available (ಲಭ್ಯ / उपलब्ध)'}`);
+    loadWorkerFeed();
+    loadInsights();
+  } catch (err) {
+    alert("Error updating worker status.");
+  }
 }
