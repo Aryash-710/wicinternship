@@ -9,13 +9,14 @@ router = APIRouter(prefix="/api/v1/telecom", tags=["IVR Voice Call Regional Micr
 @router.post("/ivr", response_model=IVRResponse)
 async def process_ivr(req: IVRRequest):
     """
-    IVR Voice Call Webhook: processes DTMF inputs and returns bilingual voice prompts
+    IVR Voice Call Webhook: processes DTMF and Voice Speech inputs and returns bilingual voice prompts
     in Kannada and Hindi for worker registration, job discovery, and fair wage calculation.
     """
     res = IVRService.handle_ivr_call(
         call_sid=req.call_sid,
         phone=req.caller_phone,
         digits=req.digits,
+        speech_result=req.speech_result,
         action_url="/api/v1/telecom/ivr/twiml"
     )
     return IVRResponse(**res)
@@ -25,16 +26,18 @@ async def process_ivr(req: IVRRequest):
 async def process_ivr_twiml(
     CallSid: str = Form(...),
     From: str = Form(""),
-    Digits: Optional[str] = Form(None)
+    Digits: Optional[str] = Form(None),
+    SpeechResult: Optional[str] = Form(None)
 ):
     """
     Direct Twilio Voice XML webhook endpoint responding with TwiML (application/xml).
-    Configure this URL in your Twilio Console (Phone Numbers -> Voice & Fax -> A CALL COMES IN).
+    Supports both DTMF digits and Speech input (SpeechResult).
     """
     res = IVRService.handle_ivr_call(
         call_sid=CallSid,
         phone=From,
         digits=Digits,
+        speech_result=SpeechResult,
         action_url="/api/v1/telecom/ivr/twiml"
     )
     return Response(content=res["twiml_xml"], media_type="application/xml")
@@ -44,7 +47,8 @@ async def process_ivr_twiml(
 async def process_ivr_exotel(
     CallSid: str = Form(...),
     From: str = Form(""),
-    Digits: Optional[str] = Form(None)
+    Digits: Optional[str] = Form(None),
+    SpeechResult: Optional[str] = Form(None)
 ):
     """
     Direct Exotel Voice XML webhook endpoint responding with Exotel/TwiML XML.
@@ -53,6 +57,7 @@ async def process_ivr_exotel(
         call_sid=CallSid,
         phone=From,
         digits=Digits,
+        speech_result=SpeechResult,
         action_url="/api/v1/telecom/ivr/exotel"
     )
     return Response(content=res["twiml_xml"], media_type="application/xml")

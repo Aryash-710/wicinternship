@@ -1092,6 +1092,124 @@ async function sendIvrDigits(digits) {
   }
 }
 
+function handleDialInputEnter() {
+  const input = document.getElementById("phone-dial-input");
+  if (!input || !input.value.trim()) return;
+  const val = input.value.trim();
+  input.value = "";
+  if (!isIvrCallActive) {
+    alert("Please click 📞 CALL first to start an active voice session.");
+    return;
+  }
+  if (/^\d+$/.test(val)) {
+    sendIvrDigits(val);
+  } else {
+    sendIvrVoice(val);
+  }
+}
+
+function handlePhoneVoiceInput() {
+  if (!isIvrCallActive) {
+    alert("Please click 📞 CALL first to start an active voice session.");
+    return;
+  }
+
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    const text = prompt("Web Speech recognition is not available in your browser.\nPlease enter what you want to say (e.g. 'Plumber', 'Electrician', 'Hassan', 'Kanakapura'):");
+    if (text && text.trim()) {
+      sendIvrVoice(text.trim());
+    }
+    return;
+  }
+
+  const screen = document.getElementById("screen-text");
+  const voiceBtn = document.getElementById("btn-voice-input");
+  const recognition = new SpeechRec();
+  recognition.lang = "kn-IN";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  if (voiceBtn) {
+    voiceBtn.innerText = "🔴 LISTENING...";
+    voiceBtn.style.background = "#dc2626";
+  }
+  screen.innerText = "🎙️ Listening... Please speak your Occupation or City/Location now!";
+
+  recognition.onresult = function(event) {
+    if (voiceBtn) {
+      voiceBtn.innerText = "🎙️ SPEAK";
+      voiceBtn.style.background = "#0284c7";
+    }
+    const transcript = event.results[0][0].transcript;
+    screen.innerText = `🎙️ Heard: "${transcript}"\nProcessing your voice input...`;
+    sendIvrVoice(transcript);
+  };
+
+  recognition.onerror = function(event) {
+    if (voiceBtn) {
+      voiceBtn.innerText = "🎙️ SPEAK";
+      voiceBtn.style.background = "#0284c7";
+    }
+    const fallback = prompt("Could not capture microphone clearly.\nYou can type what you wanted to say (e.g. 'Plumber', 'Hassan'):");
+    if (fallback && fallback.trim()) {
+      sendIvrVoice(fallback.trim());
+    }
+  };
+
+  recognition.onend = function() {
+    if (voiceBtn) {
+      voiceBtn.innerText = "🎙️ SPEAK";
+      voiceBtn.style.background = "#0284c7";
+    }
+  };
+
+  recognition.start();
+}
+
+async function sendIvrVoice(speechText) {
+  const screen = document.getElementById("screen-text");
+  const xmlDisplay = document.getElementById("twiml-display");
+  const phone = document.getElementById("phone-caller-id").value.trim() || "9845099112";
+
+  try {
+    const res = await fetch("/api/v1/telecom/ivr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        call_sid: telecomSessionId,
+        caller_phone: phone,
+        digits: "",
+        speech_result: speechText
+      })
+    });
+    const data = await res.json();
+    let screenMsg = `📞 ACTIVE CALL (Voice Input: "${speechText}")\n\n${data.prompt_text}`;
+    if (data.options && data.options.length > 0 && !data.prompt_text.includes("1:")) {
+      screenMsg += "\n\nOptions:\n" + data.options.map(o => `[${o.digit}] ${o.label}`).join("\n");
+    }
+    screen.innerText = screenMsg;
+    if (xmlDisplay) {
+      xmlDisplay.innerText = data.twiml_xml || "<!-- No TwiML -->";
+    }
+
+    lastIvrAudioText = data.prompt_audio_text;
+    speakBilingualPrompt(data.prompt_text || lastIvrAudioText);
+
+    if (data.action === "hangup") {
+      isIvrCallActive = false;
+      updateCallStatusBadge("Completed", false);
+      loadWorkerFeed();
+      loadInsights();
+      setTimeout(() => {
+        screen.innerText += "\n\n[Call completed - Audio hung up]";
+      }, 3500);
+    }
+  } catch (e) {
+    screen.innerText = "Error transmitting voice input.";
+  }
+}
+
 // Speak a bilingual prompt with [ಕನ್ನಡ]: ... \n[हिन्दी]: ... markers.
 // Falls back to speaking the whole text if markers are absent.
 function speakBilingualPrompt(promptText) {

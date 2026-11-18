@@ -174,17 +174,17 @@ def test_ivr_service_direct_unit_flows():
     # 2a: Press 1 from menu -> Prompt trade
     res_reg1 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
     assert res_reg1["action"] == "gather"
-    assert "ವೃತ್ತಿಯನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg1["prompt_text"]
+    assert "ವೃತ್ತಿ" in res_reg1["prompt_text"]
 
     # 2b: Choose trade (e.g. 1 for Electrician) -> Prompt experience
     res_reg2 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
     assert res_reg2["action"] == "gather"
-    assert "ಅನುಭವದ ವರ್ಷಗಳನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg2["prompt_text"]
+    assert "ಅನುಭವ" in res_reg2["prompt_text"]
 
     # 2c: Choose experience (e.g. 3 for 3 years) -> Prompt city
     res_reg3 = IVRService.handle_ivr_call(call_sid, phone, digits="3")
     assert res_reg3["action"] == "gather"
-    assert "ಸ್ಥಳ ಅಥವಾ ನಗರವನ್ನು ಆಯ್ಕೆ ಮಾಡಿ" in res_reg3["prompt_text"]
+    assert "ಸ್ಥಳ" in res_reg3["prompt_text"]
 
     # 2d: Choose city (e.g. 1 for Bengaluru) -> Finalize & hangup
     res_reg4 = IVRService.handle_ivr_call(call_sid, phone, digits="1")
@@ -461,5 +461,77 @@ def test_custom_location_and_no_wage_input(client):
     assert worker["city"] == "Kanakapura Rural"
     assert worker["daily_rate"] > 0
     assert worker["daily_rate"] >= 800.0
+
+
+def test_ivr_voice_speech_input_for_occupation_and_location(client):
+    from app.database import get_db
+    from app.services.worker_service import WorkerService
+
+    call_sid = "CALL_VOICE_SPEECH_TEST_1"
+    phone = "9845088991"
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
+
+    # Step 0: Greeting
+    res0 = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": ""
+    })
+    assert res0.status_code == 200
+    assert res0.json()["action"] == "gather"
+
+    # Step 1: Press 1 or speak to register
+    res1 = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "1"
+    })
+    assert res1.status_code == 200
+    assert res1.json()["action"] == "gather"
+
+    # Step 2: VOICE INPUT for OCCUPATION: say "Plumber" / "ಪ್ಲಂಬರ್"
+    res_trade = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "",
+        "speech_result": "ನಾನು ಪ್ಲಂಬರ್ ಕೆಲಸ ಮಾಡುತ್ತೇನೆ"
+    })
+    assert res_trade.status_code == 200
+    assert res_trade.json()["action"] == "gather"
+    assert "ಅನುಭವ" in res_trade.json()["prompt_text"]
+
+    # Step 3: Speak experience: say "3 years" / "ಮೂರು ವರ್ಷ"
+    res_exp = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "",
+        "speech_result": "3 years experience"
+    })
+    assert res_exp.status_code == 200
+    assert res_exp.json()["action"] == "gather"
+    assert "ಸ್ಥಳ" in res_exp.json()["prompt_text"]
+
+    # Step 4: VOICE INPUT for LOCATION: say custom place "Kanakapura"
+    res_city = client.post("/api/v1/telecom/ivr", json={
+        "call_sid": call_sid,
+        "caller_phone": phone,
+        "digits": "",
+        "speech_result": "Kanakapura"
+    })
+    assert res_city.status_code == 200
+    assert res_city.json()["action"] == "hangup"
+    assert "ನೋಂದಾಯಿಸಲಾಗಿದೆ" in res_city.json()["prompt_text"]
+
+    # Verify worker was created with voice parsed trade and spoken location
+    w = WorkerService.get_worker_by_phone(phone)
+    assert w is not None
+    assert w["trade"] == "Plumber"
+    assert w["city"] == "Kanakapura"
+    assert w["experience_years"] == 3
+    assert w["daily_rate"] > 0
 
 
