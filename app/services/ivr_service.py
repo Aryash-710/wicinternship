@@ -233,13 +233,16 @@ class IVRService:
 
         if language == "hindi":
             voice_tag = f'<Say language="hi-IN" voice="Polly.Aditi">{prompt}</Say>'
+            timeout_tag = '<Say language="hi-IN" voice="Polly.Aditi">समय समाप्त हो गया है।</Say>'
         elif language == "kannada":
-            voice_tag = f'<Say language="kn-IN">{prompt}</Say>'
+            voice_tag = f'<Say language="kn-IN" voice="Google.kn-IN-Standard-A">{prompt}</Say>'
+            timeout_tag = '<Say language="kn-IN" voice="Google.kn-IN-Standard-A">ಸಮಯ ಮೀರಿದೆ. ಧನ್ಯವಾದಗಳು.</Say>'
         else:
             # Bilingual for initial language selection greeting
             kn_part = "ನಮಸ್ಕಾರ, ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ. ಕನ್ನಡಕ್ಕಾಗಿ 1 ಒತ್ತಿ."
             hi_part = "नमस्कार, श्रमसेतु में आपका स्वागत है। हिन्दी के लिए 2 दबाएं।"
-            voice_tag = f'<Say language="kn-IN">{kn_part}</Say>\n        <Say language="hi-IN" voice="Polly.Aditi">{hi_part}</Say>'
+            voice_tag = f'<Say language="kn-IN" voice="Google.kn-IN-Standard-A">{kn_part}</Say>\n        <Say language="hi-IN" voice="Polly.Aditi">{hi_part}</Say>'
+            timeout_tag = '<Say language="kn-IN" voice="Google.kn-IN-Standard-A">ಸಮಯ ಮೀರಿದೆ. ಧನ್ಯವಾದಗಳು.</Say>'
 
         if action == "gather":
             twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -247,7 +250,7 @@ class IVRService:
     <Gather input="speech dtmf" numDigits="1" speechTimeout="auto" action="{action_url}" method="POST" timeout="12">
         {voice_tag}
     </Gather>
-    <Say language="{'hi-IN' if language == 'hindi' else 'kn-IN'}">{'समय समाप्त हो गया है।' if language == 'hindi' else 'ಸಮಯ ಮೀರಿದೆ. ಧನ್ಯವಾದಗಳು.'}</Say>
+    {timeout_tag}
     <Hangup/>
 </Response>"""
         else:
@@ -282,9 +285,9 @@ class IVRService:
         Step 0: Asks user to select language: 1 for Kannada, 2 for Hindi.
         Subsequent Steps: Proceeds 100% in the chosen language.
         """
-        digits = (digits or "").strip()
-        speech = (speech_result or "").strip()
-        phone = (phone or "").strip() or "9845000000"
+        digits = (digits if isinstance(digits, str) else "").strip()
+        speech = (speech_result if isinstance(speech_result, str) else "").strip()
+        phone = (phone if isinstance(phone, str) else "").strip() or "9845000000"
 
         session = cls.get_or_create_call_session(call_sid, phone)
         step = session.get("current_step", "lang_select")

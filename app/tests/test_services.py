@@ -518,3 +518,59 @@ def test_ivr_voice_speech_input_for_occupation_and_location():
     assert w["daily_rate"] > 0
 
 
+def test_twilio_kannada_voice_and_absolute_action_url():
+    import os
+    from starlette.requests import Request
+    from app.routers.telecom import process_ivr_twiml
+    from app.database import get_db
+
+    call_sid = "TWILIO_CALL_TEST_KANNADA_VOICE_1"
+    phone = "9845012345"
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM workers WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM users WHERE phone = ?", (phone,))
+        conn.execute("DELETE FROM telecom_sessions WHERE session_id = ?", (call_sid,))
+
+    # Create dummy Starlette Request simulating reverse proxy behind Render/ngrok
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/telecom/ivr/twiml",
+        "headers": [
+            (b"host", b"api.kaayakasetu.in"),
+            (b"x-forwarded-proto", b"https"),
+            (b"x-forwarded-host", b"bluecollar.onrender.com"),
+        ],
+        "query_string": b"",
+    }
+    req = Request(scope)
+
+    # Step 0: Initial call - greeting
+    res0 = process_ivr_twiml(request=req, CallSid=call_sid, From=phone, Digits=None)
+    assert res0.status_code == 200
+    xml_0 = res0.body.decode("utf-8")
+    assert 'voice="Google.kn-IN-Standard-A"' in xml_0
+    assert 'language="kn-IN"' in xml_0
+    assert 'voice="Polly.Aditi"' in xml_0
+    assert 'action="https://bluecollar.onrender.com/api/v1/telecom/ivr/twiml"' in xml_0
+
+    # Step 1: User enters 1 for Kannada
+    res1 = process_ivr_twiml(request=req, CallSid=call_sid, From=phone, Digits="1")
+    assert res1.status_code == 200
+    xml_1 = res1.body.decode("utf-8")
+    assert '<Say language="kn-IN" voice="Google.kn-IN-Standard-A">' in xml_1
+    assert "ಕಾಯಕಸೇತುವಿಗೆ ಸ್ವಾಗತ" in xml_1
+    assert 'action="https://bluecollar.onrender.com/api/v1/telecom/ivr/twiml"' in xml_1
+
+    # Step 2: Environment variable override test
+    os.environ["TWILIO_WEBHOOK_URL"] = "https://custom-proxy.ngrok-free.app/api/v1/telecom/ivr/twiml"
+    try:
+        res_env = process_ivr_twiml(request=req, CallSid=call_sid, From=phone, Digits="1")
+        xml_env = res_env.body.decode("utf-8")
+        assert 'action="https://custom-proxy.ngrok-free.app/api/v1/telecom/ivr/twiml"' in xml_env
+    finally:
+        os.environ.pop("TWILIO_WEBHOOK_URL", None)
+
+
+
