@@ -67,8 +67,12 @@
           <!-- 1-Click Instant Evaluation Logins -->
           <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px dashed var(--border-color);">
             <div style="font-weight:700; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.5px;">
-              ⚡ 1-Click Evaluation Logins (No typing required):
+              ⚡ 1-Click Evaluation Logins:
             </div>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem;">
+              👉 <strong>Sign in as Employer</strong> to test <em>Hiring Workers, seeing 'Busy in Work' status, and Removing work postings</em>.<br>
+              👉 <strong>Sign in as Worker</strong> to test <em>Status toggle (Available/Busy), viewing jobs, and the Hindi IVR simulator</em>.
+            </p>
             <div style="display:flex; flex-direction:column; gap:0.5rem;">
               <button type="button" class="demo-pill-btn" onclick="directDemoLogin('ramesh_worker', 'password123')">
                 <div>
@@ -370,7 +374,12 @@
             <div id="match-query-note" style="font-size:0.82rem; color:var(--text-muted);">
               ⚡ Queries are scoped strictly to your account.
             </div>
-            <button class="btn btn-primary" onclick="runMatching()">⚡ Run Smart Match</button>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <button id="btn-remove-selected-job" class="btn btn-outline" style="color:#dc2626; border-color:#dc2626; display:none;" onclick="removeSelectedJobFromMatcher()">
+                🗑️ Remove Selected Work (ಕೆಲಸ ತೆಗೆದುಹಾಕಿ)
+              </button>
+              <button class="btn btn-primary" onclick="runMatching()">⚡ Run Smart Match</button>
+            </div>
           </div>
         </div>
         <div id="match-results-container">
@@ -854,6 +863,6 @@ Twilio: +1 (737) 250-8034
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=2.1"></script>
 </body>
 </html>

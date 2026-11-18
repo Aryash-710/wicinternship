@@ -219,10 +219,14 @@ function openMainDashboard() {
   } else {
     // -----------------------------------------------------------------
     // EMPLOYER PROFILE:
-    // MUST NOT SEE: Worker Registration, Job Feed, IVR Service
+    // MUST SEE: Workers Feed, Work Postings (to manage & remove jobs), Post Work, Smart Matcher, Fair Wage
+    // MUST NOT SEE: Worker Registration, IVR Service
     // -----------------------------------------------------------------
-    if (navBtnJobs) navBtnJobs.style.display = "none";
-    if (tabJobs) tabJobs.style.display = "none";
+    if (navBtnJobs) {
+      navBtnJobs.style.display = "inline-flex";
+      navBtnJobs.innerText = "💼 Work Postings (ಕೆಲಸಗಳು)";
+    }
+    if (tabJobs) tabJobs.style.display = "block";
     if (navBtnPhone) navBtnPhone.style.display = "none";
     if (tabPhone) tabPhone.style.display = "none";
 
@@ -441,7 +445,7 @@ function switchTab(tabId, btn) {
     if (currentUser.role === "worker") {
       if (tabId === "tab-workers" || tabId === "tab-post-job" || tabId === "tab-register-worker") return;
     } else if (currentUser.role === "employer") {
-      if (tabId === "tab-jobs" || tabId === "tab-register-worker" || tabId === "tab-phone-simulator") return;
+      if (tabId === "tab-register-worker" || tabId === "tab-phone-simulator") return;
     }
   }
 
@@ -652,12 +656,15 @@ async function populateMatchingDropdowns() {
       if (label) label.innerText = "Select Your Job Opening (Your Postings Only):";
       if (note) note.innerHTML = `🔒 <strong>Scoped Match:</strong> Only job openings created by <strong>${currentUser.company_name || currentUser.full_name}</strong> are displayed. Other employers' data is hidden.`;
       select.innerHTML = "";
+      const btnRemoveJob = document.getElementById("btn-remove-selected-job");
       if (data.queries && data.queries.length > 0) {
+        if (btnRemoveJob) btnRemoveJob.style.display = "inline-flex";
         data.queries.forEach(q => {
           select.innerHTML += `<option value="${q.id}">${q.label}</option>`;
         });
         runMatching();
       } else {
+        if (btnRemoveJob) btnRemoveJob.style.display = "none";
         select.innerHTML = `<option value="">No open jobs posted yet</option>`;
         if (resultsContainer) {
           resultsContainer.innerHTML = `
@@ -675,6 +682,17 @@ async function populateMatchingDropdowns() {
   } catch (err) {
     select.innerHTML = "<option>Error loading queries.</option>";
   }
+}
+
+async function removeSelectedJobFromMatcher() {
+  const select = document.getElementById("match-target-select");
+  const jobId = select ? select.value : null;
+  const jobTitle = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex].text : "Selected Work";
+  if (!jobId) {
+    alert("Please select a job opening to remove.");
+    return;
+  }
+  await removeJobPosting(jobId, jobTitle);
 }
 
 function toggleMatchMode() {
